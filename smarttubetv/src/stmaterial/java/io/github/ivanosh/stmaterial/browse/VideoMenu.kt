@@ -18,7 +18,9 @@ import io.github.ivanosh.stmaterial.ui.MenuItem
 enum class VideoAction { QUEUE, PLAYLIST, MARK_WATCHED, CHANNEL, NOT_INTERESTED, BLOCK_CHANNEL, REMOVE_FROM_HISTORY }
 
 /** What the menu needs to know about a card and about the session, to leave out what cannot work. */
-data class VideoFacts(val signedIn: Boolean, val hasVideo: Boolean, val hasChannel: Boolean, val hasAuthor: Boolean, val hasFeedback: Boolean)
+data class VideoFacts(val signedIn: Boolean, val hasVideo: Boolean, val hasChannel: Boolean, val hasAuthor: Boolean, val hasFeedback: Boolean,
+    /** Upstream's remove from history makes its server call only with this token; without it, it just reports success. */
+    val hasHistoryToken: Boolean)
 
 /**
  * The actions of a section. A history row (the History tab, or [inContinue]: "Continue watching" on Subscriptions)
@@ -38,7 +40,7 @@ fun videoMenuActions(section: Int, inContinue: Boolean = false): List<VideoActio
 
 /**
  * Those of [videoMenuActions] that can work for this card. Save to playlist, Mark as watched, Not interested and
- * Remove from history need an account; Queue and Save need a video, not a channel or a playlist;
+ * Remove from history need an account (and Remove from history the feedback token, or it would do nothing); Queue and Save need a video, not a channel or a playlist;
  * Go to channel needs a channel that can be opened (a channel id, or a video to look it up from) and Block
  * channel an author, which is what the old menu asked; Not interested needs the feedback tokens.
  */
@@ -51,7 +53,7 @@ fun availableVideoActions(section: Int, facts: VideoFacts, inContinue: Boolean =
             VideoAction.CHANNEL -> facts.hasChannel
             VideoAction.BLOCK_CHANNEL -> facts.hasAuthor
             VideoAction.NOT_INTERESTED -> facts.signedIn && facts.hasFeedback
-            VideoAction.REMOVE_FROM_HISTORY -> facts.signedIn
+            VideoAction.REMOVE_FROM_HISTORY -> facts.signedIn && facts.hasHistoryToken
         }
     }
 
@@ -69,6 +71,8 @@ class CardMenu(
     private val onWatched: (Video) -> Unit = {},
     private val onLeftContinue: (Video) -> Unit = {},
 ) {
+    private val marking = HashSet<String?>()
+
     fun items(video: Video, section: Int, inContinue: Boolean = false): List<MenuItem> {
         val token = video.mediaItem
         val facts = VideoFacts(
@@ -77,6 +81,7 @@ class CardMenu(
             hasChannel = ChannelPresenter.canOpenChannel(video),
             hasAuthor = video.getAuthor() != null,
             hasFeedback = token != null && (token.feedbackToken != null || token.feedbackEndpoint != null),
+            hasHistoryToken = token?.feedbackToken != null,
         )
         val menu = VideoMenuPresenter.instance(activity)
         return availableVideoActions(section, facts, inContinue).map { action ->
@@ -89,6 +94,8 @@ class CardMenu(
                     AppDialogUtil.showAddToPlaylistDialog(activity, video, removalCallback(null, false))
                 }
                 VideoAction.MARK_WATCHED -> MenuItem(activity.getString(R.string.material_video_mark_watched)) {
+                    // The click and the dismissal are separate steps: a second click before it must not send again.
+                    if (!marking.add(video.videoId)) return@MenuItem
                     menu.markAsWatched(video)
                     onWatched(video)
                     onMessage(activity.getString(R.string.material_video_marked_watched))
@@ -105,6 +112,7 @@ class CardMenu(
                     BlockedChannelData.instance(activity).persistNow()
                 }
                 VideoAction.REMOVE_FROM_HISTORY -> MenuItem(activity.getString(R.string.material_video_remove_history)) {
+                    marking.remove(video.videoId)
                     menu.removeFromHistory(
                         video,
                         if (inContinue) leaveContinueCallback() else removalCallback(R.string.material_video_removed_history, false)

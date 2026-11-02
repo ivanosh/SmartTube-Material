@@ -57,9 +57,10 @@ internal class SubscriptionsFeed(private val rows: MutableList<VideoRow>, privat
     fun leaveHistory(key: String, markedWatched: Boolean) {
         if (markedWatched) {
             watched.add(key)
-            (history + firstPage.orEmpty()).filter { videoKey(it) == key }.forEach { it.markFullyViewed() }
+            left.remove(key)
         } else {
             left.add(key)
+            watched.remove(key)
         }
         history = history.filterNot { videoKey(it) == key }
         arrange()
@@ -118,7 +119,7 @@ internal class SubscriptionsFeed(private val rows: MutableList<VideoRow>, privat
         val existing = rows.firstOrNull { it.id == model.id }
         if (existing != null && existing.videos.map(::videoKey) == model.ids) return existing
         return VideoRow(model.id, title(model.titleRes), isGrid = false).also { row ->
-            row.add(model.ids.mapNotNull(byId::get))
+            row.add(model.ids.mapNotNull(byId::get).onEach(::applyMarks))
         }
     }
 
@@ -126,7 +127,7 @@ internal class SubscriptionsFeed(private val rows: MutableList<VideoRow>, privat
         val claimed = rows
             .filter { it.id != SubscriptionRowIds.EARLIER && it.id != SubscriptionRowIds.CONTINUE }
             .flatMapTo(HashSet()) { row -> row.videos.map(::videoKey) }
-        val fresh = visible(videos).filter { videoKey(it) !in claimed }
+        val fresh = visible(videos).filter { videoKey(it) !in claimed }.onEach(::applyMarks)
         val earlier = rows.firstOrNull { it.id == SubscriptionRowIds.EARLIER }
         when {
             earlier != null -> earlier.add(fresh, atStart)
@@ -154,6 +155,12 @@ internal class SubscriptionsFeed(private val rows: MutableList<VideoRow>, privat
             row.firstPage = if (row.id == SubscriptionRowIds.EARLIER) 0 else row.videos.size
             row.group = if (row.id == SubscriptionRowIds.CONTINUE) historyGroup else group
         }
+    }
+
+    /** A copy built after the mark keeps what this visit did to it: a full bar, or none once removed from the history. */
+    private fun applyMarks(video: Video) {
+        val key = videoKey(video)
+        if (key in watched) video.markFullyViewed() else if (key in left) video.markNotViewed()
     }
 
     private fun visible(videos: List<Video>): List<Video> = videos.filter { videoKey(it) !in removed }.distinctBy(::videoKey)

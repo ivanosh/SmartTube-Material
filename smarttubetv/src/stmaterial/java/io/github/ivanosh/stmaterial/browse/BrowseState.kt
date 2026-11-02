@@ -81,6 +81,15 @@ class VideoRow(val id: String, title: String?, val isGrid: Boolean) {
         return true
     }
 
+    /** The shown copy of [key] has no history any more: no bar. True when this row has it. */
+    internal fun clearProgress(key: String): Boolean {
+        val shown = videos.filter { videoKey(it) == key }
+        if (shown.isEmpty()) return false
+        shown.forEach { it.markNotViewed() }
+        revision++
+        return true
+    }
+
     /** Takes videos out of this row only. Unlike [removeWhere], their groups keep them. */
     internal fun drop(gone: Set<String>) {
         if (videos.none { videoKey(it) in gone }) return
@@ -320,10 +329,8 @@ class BrowseState(
 
     private fun leaveContinue(video: Video, watched: Boolean) {
         val key = videoKey(video)
-        if (watched) {
-            video.markFullyViewed()
-            rows.forEach { it.markWatched(key) }
-        }
+        if (watched) rows.forEach { it.markWatched(key) }
+        else rows.filter { it.id != SubscriptionRowIds.CONTINUE }.forEach { it.clearProgress(key) }
         if (!isSubscriptionGrid) return
         focused?.takeIf { it.rowId == SubscriptionRowIds.CONTINUE && it.videoId == key }?.let { current ->
             val cards = rows.map { row -> CardRow(row.id, row.videos.map(::videoKey)) }

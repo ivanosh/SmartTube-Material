@@ -12,7 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class VideoMenuTest {
-    private val all = VideoFacts(signedIn = true, hasVideo = true, hasChannel = true, hasAuthor = true, hasFeedback = true)
+    private val all = VideoFacts(signedIn = true, hasVideo = true, hasChannel = true, hasAuthor = true, hasFeedback = true, hasHistoryToken = true)
 
     @Test
     fun `history has remove from history instead of not interested`() {
@@ -102,5 +102,12 @@ class VideoMenuTest {
     @Test
     fun `mark as watched needs a video`() {
         assertEquals(false, MARK_WATCHED in availableVideoActions(MediaGroup.TYPE_HOME, all.copy(hasVideo = false)))
+    }
+
+    @Test
+    fun removeFromHistoryIsHiddenWithoutTheFeedbackTokenSinceUpstreamWouldReportSuccessWithNoCall() {
+        val shown = availableVideoActions(MediaGroup.TYPE_HISTORY, all.copy(hasHistoryToken = false))
+        assertEquals(false, REMOVE_FROM_HISTORY in shown)
+        assertEquals(false, REMOVE_FROM_HISTORY in availableVideoActions(MediaGroup.TYPE_SUBSCRIPTIONS, all.copy(hasHistoryToken = false), inContinue = true))
     }
 }

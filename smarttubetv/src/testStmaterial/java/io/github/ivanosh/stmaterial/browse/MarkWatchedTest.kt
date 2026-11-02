@@ -57,7 +57,8 @@ class MarkWatchedTest {
         state.onCardFocused(FocusKey("continue", "h2"), 0)
         state.markWatched(video("h2"))
         assertNull(state.ids("continue"))
-        assertEquals("new", state.pendingFocus?.rowId)
+        // The neighbour is a card of New; the copy of the removed video there is not offered as the target.
+        assertEquals(FocusKey("new", "s1"), state.pendingFocus)
     }
 
     @Test
@@ -72,5 +73,64 @@ class MarkWatchedTest {
         state.markWatched(video("a"))
         assertEquals(100f, row.videos.first().percentWatched)
         assertEquals(true, row.revision > before)
+    }
+
+    private fun BrowseState.bar(row: String, id: String) = rows.first { it.id == row }.videos.first { it.videoId == id }.percentWatched
+
+    @Test
+    fun removedFromHistoryLeavesContinueOnlyAndDropsTheStaleBar() {
+        val state = state()
+        val before = state.rows.first { it.id == "new" }.revision
+        state.leaveContinue(video("h1", 40f))
+        assertEquals(listOf("h2"), state.ids("continue"))
+        assertEquals(listOf("s1", "h1", "h2"), state.ids("new"))
+        assertEquals(0f, state.bar("new", "h1"))
+        assertEquals(60f, state.bar("new", "h2"))
+        assertEquals(true, state.rows.first { it.id == "new" }.revision > before)
+    }
+
+    @Test
+    fun aLateHistoryDoesNotBringARemovedCardBack() {
+        val state = state()
+        state.leaveContinue(video("h1", 40f))
+        state.updateHistory(VideoGroup.from(listOf(video("h1", 40f), video("h2", 60f)), null, 0), state.epoch)
+        assertEquals(listOf("h2"), state.ids("continue"))
+        assertEquals(listOf("s1", "h1", "h2"), state.ids("new"))
+        assertEquals(0f, state.bar("new", "h1"))
+    }
+
+    @Test
+    fun removedFromHistoryMovesFocusToTheNeighbourCard() {
+        val state = state()
+        state.onCardFocused(FocusKey("continue", "h1"), 0)
+        state.leaveContinue(video("h1", 40f))
+        assertEquals(FocusKey("continue", "h2"), state.pendingFocus)
+    }
+
+    @Test
+    fun removedFromHistoryKeepsFocusWhenFocusWasInNew() {
+        val state = state()
+        state.onCardFocused(FocusKey("new", "h1"), 1)
+        state.leaveContinue(video("h1", 40f))
+        assertNull(state.pendingFocus)
+    }
+
+    @Test
+    fun theLastContinueCardRemovedFocusesANewCardNotItsOwnCopy() {
+        val state = state()
+        state.leaveContinue(video("h1", 40f))
+        state.onCardFocused(FocusKey("continue", "h2"), 0)
+        state.leaveContinue(video("h2", 60f))
+        assertNull(state.ids("continue"))
+        assertEquals(FocusKey("new", "s1"), state.pendingFocus)
+    }
+
+    @Test
+    fun aMarkedVideoKeepsItsFullBarAfterTheFeedReloads() {
+        val state = state()
+        state.markWatched(video("h1", 40f))
+        state.updateSection(VideoGroup.from(listOf(video("s1"), video("h1", 40f), video("h2", 60f)), subs, 0).apply { action = VideoGroup.ACTION_REPLACE })
+        assertEquals(100f, state.bar("new", "h1"))
+        assertEquals(listOf("h2"), state.ids("continue"))
     }
 }
