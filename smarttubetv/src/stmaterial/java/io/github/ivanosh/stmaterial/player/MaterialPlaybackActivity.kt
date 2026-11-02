@@ -369,6 +369,7 @@ class MaterialPlaybackActivity : PlaybackActivity() {
 
     /** The first page of the related videos, or none; from the fragment, on the main thread. The row of the last video goes before the next one's arrives. */
     fun setUpNext(list: List<Video>) {
+        primePanel()
         if (list == panel.upNext) return
         // A reload of the same video clears the row and fills it again: focus in the row goes back to its card.
         if (list.isEmpty() && ui.focus == PanelFocus.UPNEXT) rowLostIndex = ui.upNextIndex
@@ -400,6 +401,7 @@ class MaterialPlaybackActivity : PlaybackActivity() {
 
     /** As on the upstream bar, chapters and SponsorBlock add up, and null clears them. */
     fun setMarks(segments: List<SeekBarSegment>?) {
+        primePanel()
         panel.marks = if (segments == null) emptyList() else (panel.marks + segments.mapNotNull(::markOf)).distinct()
         // Once per change of the marks, not per frame: the legend and whether it needs a line of its own.
         val legend = legendEntries(panel.marks, ::categoryName)
@@ -422,6 +424,7 @@ class MaterialPlaybackActivity : PlaybackActivity() {
     /** The chapters of the video, or none; from the fragment, on the main thread. Chapters of the last video go before the next one's arrive. */
     fun setChapters(list: List<ChapterUi>) {
         val sorted = list.sortedBy { it.startMs }
+        primePanel()
         if (sorted == panel.chapters) return
         panel.chapters = sorted
         if (sorted.isEmpty()) panel.chaptersRevealed = false
@@ -777,9 +780,18 @@ class MaterialPlaybackActivity : PlaybackActivity() {
     private fun refresh() {
         if (!isPanelOpen && !panel.seekPreview) return
         val view = player ?: return
+        primePanel(view)
+        panel.positionMs = seek.targetMs ?: view.positionMs
+    }
+
+    /**
+     * What the panel says besides the position, written when a video's data arrives as well as on open, so that a hidden
+     * panel already holds it and opening does not compose new text. Once per event, never per tick.
+     */
+    private fun primePanel(view: MaterialPlaybackFragment? = player) {
+        view ?: return
         panel.title = view.panelTitle
         panel.author = view.video?.author.orEmpty()
-        panel.positionMs = seek.targetMs ?: view.positionMs
         panel.durationMs = view.durationMs
         panel.playing = view.playWhenReady
     }

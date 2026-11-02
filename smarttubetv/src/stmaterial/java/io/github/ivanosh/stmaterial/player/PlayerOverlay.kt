@@ -20,11 +20,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
+import io.github.ivanosh.stmaterial.logic.panelLayoutOpen
 import androidx.compose.ui.draw.CacheDrawScope
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
@@ -49,6 +53,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.layout.layout
@@ -96,12 +101,13 @@ fun PlayerOverlay(state: PlayerOverlayState) {
     // layer from two animatables, so no frame composes anything: the targets come from a snapshot flow.
     val alpha = remember { Animatable(0f) }
     val lift = remember { Animatable(1f) }
-    // The layout trails the close: it is told to collapse only after the fade has ended.
+    // The layout of a hidden panel is the open one (alpha 0), so that opening changes layers only. The seek preview is the
+    // exception: it collapses the layout to the bar, and the full layout comes back after the fade of a close from it.
     LaunchedEffect(state) {
-        snapshotFlow { (state.focus != PanelFocus.HIDDEN) to (state.focus != PanelFocus.HIDDEN || state.seekPreview) }.collect { (open, shown) ->
-            if (shown) {
+        snapshotFlow { (state.focus != PanelFocus.HIDDEN) to state.seekPreview }.collect { (open, preview) ->
+            if (open || preview) {
                 state.layoutShown = true
-                state.layoutOpen = open
+                state.layoutOpen = panelLayoutOpen(open, preview)
             }
         }
     }
@@ -109,17 +115,20 @@ fun PlayerOverlay(state: PlayerOverlayState) {
         snapshotFlow { state.focus != PanelFocus.HIDDEN || state.seekPreview }.collectLatest { shown ->
             if (shown) {
                 lift.snapTo(if (alpha.value < 1f) 1f else 0f)
+                // Opening from hidden: the frame that lays out and draws the panel for the first time is slow on a weak
+                // device, and an animation that began in it would be over in the next one. It starts on the frame after.
+                if (alpha.value == 0f) withFrameNanos { }
                 coroutineScope {
-                    launch { alpha.animateTo(1f, tween(OPEN_MS)) }
-                    launch { lift.animateTo(0f, tween(OPEN_MS)) }
+                    launch { alpha.animateTo(1f, tween(OPEN_MS, easing = FastOutSlowInEasing)) }
+                    launch { lift.animateTo(0f, tween(OPEN_MS, easing = FastOutSlowInEasing)) }
                 }
             } else {
                 coroutineScope {
-                    launch { alpha.animateTo(0f, tween(CLOSE_MS)) }
-                    launch { lift.animateTo(1f, tween(CLOSE_MS)) }
+                    launch { alpha.animateTo(0f, tween(CLOSE_MS, easing = FastOutLinearInEasing)) }
+                    launch { lift.animateTo(1f, tween(CLOSE_MS, easing = FastOutLinearInEasing)) }
                 }
                 state.layoutShown = false
-                state.layoutOpen = false
+                state.layoutOpen = true
             }
         }
     }
@@ -131,6 +140,9 @@ fun PlayerOverlay(state: PlayerOverlayState) {
                 Modifier
                     .collapsedWhenHidden(state)
                     .graphicsLayer {
+                        // Alpha per draw call, not an offscreen layer: that layer is cut at the panel's bounds, and the scrim's ramp
+                        // reaches above them, so for the length of the fade it showed as a dark rectangle with a hard top edge.
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
                         this.alpha = alpha.value
                         translationY = lift.value * LiftDistance.toPx()
                     }

@@ -81,7 +81,7 @@ class PlayerOverlayState {
      * fade-out has ended, so the bar does not jump down while it fades. Written by the overlay, read in layout and draw only.
      */
     var layoutShown by mutableStateOf(false)
-    var layoutOpen by mutableStateOf(false)
+    var layoutOpen by mutableStateOf(true)
     /** The top of the seek bar in the panel, in pixels, for the scrim to reach full strength there. Read in draw only. */
     var barTopPx by mutableFloatStateOf(0f)
 }
