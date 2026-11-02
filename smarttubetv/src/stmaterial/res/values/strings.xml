@@ -24,6 +24,8 @@
     <string translatable="false" name="material_video_hidden">Got it, we will show less like this</string>
     <string translatable="false" name="material_video_blocked">Channel blocked</string>
     <string translatable="false" name="material_video_removed_history">Removed from history</string>
+    <string translatable="false" name="material_video_mark_watched">Mark as watched</string>
+    <string translatable="false" name="material_video_marked_watched">Marked as watched</string>
     <string translatable="false" name="material_start_moved">%1$s opens first now</string>
     <string translatable="false" name="material_editor_subtitle">Settings always stays in the menu.</string>
     <string translatable="false" name="material_editor_in_menu">In menu</string>

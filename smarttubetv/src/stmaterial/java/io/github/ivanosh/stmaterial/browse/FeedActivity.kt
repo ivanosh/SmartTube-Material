@@ -28,7 +28,10 @@ abstract class FeedActivity<P> : LeanbackActivity() where P : BasePresenter<*>, 
     protected val state = BrowseState(clock = deviceClock(), rowTitle = { getString(it) })
     protected abstract val presenter: P
     protected var title by mutableStateOf<String?>(null)
-    private val cardMenu = CardMenu(this, onGone = { state.updateSection(it) }, onMessage = { state.message = it })
+    private val cardMenu = CardMenu(
+        this, onGone = { state.updateSection(it) }, onMessage = { state.message = it },
+        onWatched = { state.markWatched(it) }, onLeftContinue = { state.leaveContinue(it) },
+    )
 
     protected val feedActions = object : FeedPageActions {
         override fun onVideoFocused(video: Video) = presenter.onVideoItemSelected(video)

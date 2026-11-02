@@ -72,6 +72,15 @@ class VideoRow(val id: String, title: String?, val isGrid: Boolean) {
         videos.forEach { keys.add(videoKey(it)) }
     }
 
+    /** The shown copy of [key] gets a full bar; true when this row has it. */
+    internal fun markWatched(key: String): Boolean {
+        val shown = videos.filter { videoKey(it) == key }
+        if (shown.isEmpty()) return false
+        shown.forEach { it.markFullyViewed() }
+        revision++
+        return true
+    }
+
     /** Takes videos out of this row only. Unlike [removeWhere], their groups keep them. */
     internal fun drop(gone: Set<String>) {
         if (videos.none { videoKey(it) in gone }) return
@@ -294,6 +303,36 @@ class BrowseState(
                 }
             }
         }
+    }
+
+    /** True while the focused card is in "Continue watching" on the Subscriptions tab. */
+    val focusedInContinue: Boolean
+        get() = isSubscriptionGrid && focused?.rowId == SubscriptionRowIds.CONTINUE
+
+    /**
+     * [video] was marked as watched: every card of it shows a full bar, and it leaves "Continue watching" at
+     * once, but stays in the feed rows. Focus goes to the neighbour when the focused card leaves.
+     */
+    fun markWatched(video: Video) = leaveContinue(video, watched = true)
+
+    /** [video] was removed from the history: it leaves "Continue watching" only, the feed rows keep it. */
+    fun leaveContinue(video: Video) = leaveContinue(video, watched = false)
+
+    private fun leaveContinue(video: Video, watched: Boolean) {
+        val key = videoKey(video)
+        if (watched) {
+            video.markFullyViewed()
+            rows.forEach { it.markWatched(key) }
+        }
+        if (!isSubscriptionGrid) return
+        focused?.takeIf { it.rowId == SubscriptionRowIds.CONTINUE && it.videoId == key }?.let { current ->
+            val cards = rows.map { row -> CardRow(row.id, row.videos.map(::videoKey)) }
+            focusAfterRemoval(cards, current, setOf(key))?.let {
+                focused = it
+                pendingFocus = it
+            }
+        }
+        subscriptions.leaveHistory(key, watched)
     }
 
     fun clearContent() {

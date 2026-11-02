@@ -7,6 +7,7 @@ import io.github.ivanosh.stmaterial.logic.RowModel
 import io.github.ivanosh.stmaterial.logic.SubscriptionRowIds
 import io.github.ivanosh.stmaterial.logic.VideoItem
 import io.github.ivanosh.stmaterial.logic.buildRows
+import io.github.ivanosh.stmaterial.logic.markWatched
 
 /**
  * Lays the Subscriptions tab out in [rows]: "Continue watching", "New in subscriptions" (the first page
@@ -20,6 +21,12 @@ internal class SubscriptionsFeed(private val rows: MutableList<VideoRow>, privat
 
     /** Videos the user removed during this visit; a late history or a cumulative page must not show them. */
     private val removed = HashSet<String>()
+
+    /** Marked as watched during this visit: a full bar, whatever the history says; kept out of "Continue watching". */
+    private val watched = HashSet<String>()
+
+    /** Removed from the history during this visit: out of "Continue watching", still in the feed. */
+    private val left = HashSet<String>()
 
     /** The presenter sends one group again and again, with the next page added. Videos find their next page through it. */
     private var group: VideoGroup? = null
@@ -36,11 +43,25 @@ internal class SubscriptionsFeed(private val rows: MutableList<VideoRow>, privat
         history = emptyList()
         historyGroup = null
         removed.clear()
+        watched.clear()
+        left.clear()
     }
 
     fun onHistory(videos: List<Video>, group: VideoGroup?) {
-        history = visible(videos)
+        history = visible(videos).filterNot { videoKey(it) in left }
         historyGroup = group
+        arrange()
+    }
+
+    /** [key] is out of "Continue watching": marked [markedWatched], or removed from the history. */
+    fun leaveHistory(key: String, markedWatched: Boolean) {
+        if (markedWatched) {
+            watched.add(key)
+            (history + firstPage.orEmpty()).filter { videoKey(it) == key }.forEach { it.markFullyViewed() }
+        } else {
+            left.add(key)
+        }
+        history = history.filterNot { videoKey(it) == key }
         arrange()
     }
 
@@ -137,7 +158,10 @@ internal class SubscriptionsFeed(private val rows: MutableList<VideoRow>, privat
 
     private fun visible(videos: List<Video>): List<Video> = videos.filter { videoKey(it) !in removed }.distinctBy(::videoKey)
 
-    private fun item(video: Video) = VideoItem(videoKey(video), percentOf(video))
+    private fun item(video: Video): VideoItem {
+        val shown = VideoItem(videoKey(video), percentOf(video))
+        return if (shown.id in watched) markWatched(listOf(shown), shown.id).single() else shown
+    }
 
     private fun percentOf(video: Video): Int = video.percentWatched.toInt().coerceAtLeast(0)
 }

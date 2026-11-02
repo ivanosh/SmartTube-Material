@@ -49,7 +49,10 @@ class MaterialBrowseActivity : LeanbackActivity(), BrowseView {
     private lateinit var store: SectionStore
     private var initializing = false
 
-    private val cardMenu = CardMenu(this, onGone = { state.updateSection(it) }, onMessage = { state.message = it })
+    private val cardMenu = CardMenu(
+        this, onGone = { state.updateSection(it) }, onMessage = { state.message = it },
+        onWatched = { state.markWatched(it) }, onLeftContinue = { state.leaveContinue(it) },
+    )
 
     private val actions = object : BrowseActions {
         override fun onTabFocused(id: Int) {
@@ -103,7 +106,7 @@ class MaterialBrowseActivity : LeanbackActivity(), BrowseView {
         override fun onVideoClicked(video: Video) = presenter.onVideoItemClicked(video)
         // The menu is the screen's own: BrowsePresenter.onVideoItemLongClicked opens the old dialog.
         override fun onVideoLongClicked(video: Video) = Unit
-        override fun videoMenuItems(video: Video): List<MenuItem> = cardMenu.items(video, state.selected ?: MediaGroup.TYPE_UNDEFINED)
+        override fun videoMenuItems(video: Video): List<MenuItem> = cardMenu.items(video, state.selected ?: MediaGroup.TYPE_UNDEFINED, state.focusedInContinue)
         override fun onNeedMore(row: VideoRow) {
             state.takeMoreRequest(row)?.let(presenter::onScrollEnd)
         }

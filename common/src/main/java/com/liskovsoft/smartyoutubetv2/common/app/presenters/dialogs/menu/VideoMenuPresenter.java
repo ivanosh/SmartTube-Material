@@ -589,12 +589,17 @@ public class VideoMenuPresenter extends BaseMenuPresenter {
 
         mDialogPresenter.appendSingleButton(
                 UiOptionItem.from(getContext().getString(R.string.mark_as_watched), optionItem -> {
-                    MediaServiceManager.instance().updateHistory(mVideo, mVideo.getDurationMs());
-                    mVideo.markFullyViewed();
-                    VideoStateService.instance(getContext()).save(new State(mVideo, mVideo.getDurationMs()));
-                    Playlist.instance().sync(mVideo);
+                    startMarkAsWatched();
                     mDialogPresenter.closeDialog();
                 }));
+    }
+
+    // MATERIAL: the body of the 'mark as watched' button, so that the card menu of the Material UI runs the same calls.
+    private void startMarkAsWatched() {
+        MediaServiceManager.instance().updateHistory(mVideo, mVideo.getDurationMs());
+        mVideo.markFullyViewed();
+        VideoStateService.instance(getContext()).save(new State(mVideo, mVideo.getDurationMs()));
+        Playlist.instance().sync(mVideo);
     }
 
     private void appendShareLinkButton() {
@@ -812,6 +817,11 @@ public class VideoMenuPresenter extends BaseMenuPresenter {
     public void blockChannel(Video video, VideoMenuCallback callback) {
         bind(video, callback);
         setChannelBlocked(true);
+    }
+
+    public void markAsWatched(Video video) {
+        bind(video, null);
+        startMarkAsWatched();
     }
 
     public void removeFromHistory(Video video, VideoMenuCallback callback) {

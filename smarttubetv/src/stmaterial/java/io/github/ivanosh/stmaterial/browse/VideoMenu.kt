@@ -15,27 +15,39 @@ import com.liskovsoft.youtubeapi.service.YouTubeServiceManager
 import io.github.ivanosh.stmaterial.ui.MenuItem
 
 /** What the menu of a card can do, in the order it shows them. */
-enum class VideoAction { QUEUE, PLAYLIST, CHANNEL, NOT_INTERESTED, BLOCK_CHANNEL, REMOVE_FROM_HISTORY }
+enum class VideoAction { QUEUE, PLAYLIST, MARK_WATCHED, CHANNEL, NOT_INTERESTED, BLOCK_CHANNEL, REMOVE_FROM_HISTORY }
 
 /** What the menu needs to know about a card and about the session, to leave out what cannot work. */
 data class VideoFacts(val signedIn: Boolean, val hasVideo: Boolean, val hasChannel: Boolean, val hasAuthor: Boolean, val hasFeedback: Boolean)
 
-/** The actions of a section: five everywhere, and Remove from history on History only. */
-fun videoMenuActions(section: Int): List<VideoAction> =
-    if (section == MediaGroup.TYPE_HISTORY) VideoAction.values().toList()
-    else VideoAction.values().filter { it != VideoAction.REMOVE_FROM_HISTORY }
+/**
+ * The actions of a section. A history row (the History tab, or [inContinue]: "Continue watching" on Subscriptions)
+ * offers Remove from history and no Not interested: those videos are watched, and hiding them would only
+ * teach the recommendations the wrong thing. Everywhere else it is the other way round.
+ */
+fun videoMenuActions(section: Int, inContinue: Boolean = false): List<VideoAction> {
+    val history = section == MediaGroup.TYPE_HISTORY || inContinue
+    return VideoAction.values().filter {
+        when (it) {
+            VideoAction.REMOVE_FROM_HISTORY -> history
+            VideoAction.NOT_INTERESTED -> !history
+            else -> true
+        }
+    }
+}
 
 /**
- * Those of [videoMenuActions] that can work for this card. Save to playlist, Not interested and
+ * Those of [videoMenuActions] that can work for this card. Save to playlist, Mark as watched, Not interested and
  * Remove from history need an account; Queue and Save need a video, not a channel or a playlist;
  * Go to channel needs a channel that can be opened (a channel id, or a video to look it up from) and Block
  * channel an author, which is what the old menu asked; Not interested needs the feedback tokens.
  */
-fun availableVideoActions(section: Int, facts: VideoFacts): List<VideoAction> =
-    videoMenuActions(section).filter {
+fun availableVideoActions(section: Int, facts: VideoFacts, inContinue: Boolean = false): List<VideoAction> =
+    videoMenuActions(section, inContinue).filter {
         when (it) {
             VideoAction.QUEUE -> facts.hasVideo
             VideoAction.PLAYLIST -> facts.signedIn && facts.hasVideo
+            VideoAction.MARK_WATCHED -> facts.signedIn && facts.hasVideo
             VideoAction.CHANNEL -> facts.hasChannel
             VideoAction.BLOCK_CHANNEL -> facts.hasAuthor
             VideoAction.NOT_INTERESTED -> facts.signedIn && facts.hasFeedback
@@ -47,13 +59,17 @@ fun availableVideoActions(section: Int, facts: VideoFacts): List<VideoAction> =
  * The menu of a card for any screen that shows cards: each action goes to what the button of the same name
  * in [VideoMenuPresenter] runs. Removing a card and the confirmation line are the screen's own:
  * the presenter reports a removal through its callback, and [onGone] gets the cards to take out.
+ * [onWatched] is told of a video marked as watched, [onLeftContinue] of one removed from the history while it
+ * was in "Continue watching": it leaves that row only, and stays in the feed rows.
  */
 class CardMenu(
     private val activity: Activity,
     private val onGone: (VideoGroup) -> Unit,
     private val onMessage: (String) -> Unit,
+    private val onWatched: (Video) -> Unit = {},
+    private val onLeftContinue: (Video) -> Unit = {},
 ) {
-    fun items(video: Video, section: Int): List<MenuItem> {
+    fun items(video: Video, section: Int, inContinue: Boolean = false): List<MenuItem> {
         val token = video.mediaItem
         val facts = VideoFacts(
             signedIn = YouTubeServiceManager.instance().signInService.isSigned,
@@ -63,7 +79,7 @@ class CardMenu(
             hasFeedback = token != null && (token.feedbackToken != null || token.feedbackEndpoint != null),
         )
         val menu = VideoMenuPresenter.instance(activity)
-        return availableVideoActions(section, facts).map { action ->
+        return availableVideoActions(section, facts, inContinue).map { action ->
             when (action) {
                 VideoAction.QUEUE -> MenuItem(activity.getString(R.string.material_video_queue)) {
                     menu.addToQueue(video, null)
@@ -71,6 +87,11 @@ class CardMenu(
                 }
                 VideoAction.PLAYLIST -> MenuItem(activity.getString(R.string.material_video_playlist)) {
                     AppDialogUtil.showAddToPlaylistDialog(activity, video, removalCallback(null, false))
+                }
+                VideoAction.MARK_WATCHED -> MenuItem(activity.getString(R.string.material_video_mark_watched)) {
+                    menu.markAsWatched(video)
+                    onWatched(video)
+                    onMessage(activity.getString(R.string.material_video_marked_watched))
                 }
                 VideoAction.CHANNEL -> MenuItem(activity.getString(R.string.material_video_channel)) {
                     MediaServiceManager.chooseChannelPresenter(activity, video)
@@ -84,9 +105,20 @@ class CardMenu(
                     BlockedChannelData.instance(activity).persistNow()
                 }
                 VideoAction.REMOVE_FROM_HISTORY -> MenuItem(activity.getString(R.string.material_video_remove_history)) {
-                    menu.removeFromHistory(video, removalCallback(R.string.material_video_removed_history, false))
+                    menu.removeFromHistory(
+                        video,
+                        if (inContinue) leaveContinueCallback() else removalCallback(R.string.material_video_removed_history, false)
+                    )
                 }
             }
+        }
+    }
+
+    private fun leaveContinueCallback() = VideoMenuCallback { video, action ->
+        if (action != VideoMenuCallback.ACTION_REMOVE) return@VideoMenuCallback
+        activity.runOnUiThread {
+            onLeftContinue(video)
+            onMessage(activity.getString(R.string.material_video_removed_history))
         }
     }
 

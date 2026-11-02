@@ -57,4 +57,20 @@ class SubscriptionRowsTest {
         assertEquals(R.string.material_row_continue, rows[0].titleRes)
         assertEquals(R.string.material_row_new, rows[1].titleRes)
     }
+
+    @Test
+    fun markedWatchedLeavesContinueAndStaysInNewWithAFullBar() {
+        val subs = listOf(item("x"), item("a"), item("y"))
+        val history = markWatched(listOf(item("a", 40), item("b", 60)), "a")
+        assertEquals(100, history.first { it.id == "a" }.progressPct)
+        val rows = buildRows(subs, history)
+        assertEquals(listOf("b"), rows.first { it.id == "continue" }.ids)
+        assertEquals(listOf("x", "a", "y"), rows.first { it.id == "new" }.ids)
+    }
+
+    @Test
+    fun markingTheOnlyContinueVideoDropsTheRow() {
+        val rows = buildRows(listOf(item("a")), markWatched(listOf(item("a", 40)), "a"))
+        assertEquals(listOf("new"), rows.map { it.id })
+    }
 }

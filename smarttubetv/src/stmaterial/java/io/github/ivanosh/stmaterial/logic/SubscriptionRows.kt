@@ -13,6 +13,10 @@ object SubscriptionRowIds {
     const val EARLIER = "earlier"
 }
 
+/** The history as it is once [id] is marked as watched: a full bar, which [buildRows] keeps out of "Continue watching". */
+fun markWatched(items: List<VideoItem>, id: String): List<VideoItem> =
+    items.map { if (it.id == id) it.copy(progressPct = 100) else it }
+
 private const val CONTINUE_MIN_PCT = 5
 private const val CONTINUE_MAX_PCT = 95
 
