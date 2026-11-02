@@ -96,7 +96,7 @@ class MaterialPlaybackActivity : PlaybackActivity() {
     private val presenter get() = PlaybackPresenter.instance(this)
     private val commands by lazy { PlayerCommands(presenter) { player } }
     private val store by lazy { ButtonStore(this) }
-    private val cardMenu = CardMenu(this, onGone = ::cardsGone, onMessage = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() })
+    private val cardMenu = CardMenu(this, onGone = ::cardsGone, onMessage = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() }, canMarkWatched = false)
     /** The lines of the open card menu, in the order the overlay shows them. */
     private var cardItems = emptyList<MenuItem>()
     private var ui = PlayerUi(PanelFocus.HIDDEN, 0, panel.buttons.size + 1)

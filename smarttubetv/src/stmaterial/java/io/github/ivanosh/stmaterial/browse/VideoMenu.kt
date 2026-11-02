@@ -70,6 +70,8 @@ class CardMenu(
     private val onMessage: (String) -> Unit,
     private val onWatched: (Video) -> Unit = {},
     private val onLeftContinue: (Video) -> Unit = {},
+    /** False where marking a video as watched has nothing to show on screen, such as the player's Up next row. */
+    private val canMarkWatched: Boolean = true,
 ) {
     private val marking = HashSet<String?>()
 
@@ -84,7 +86,7 @@ class CardMenu(
             hasHistoryToken = token?.feedbackToken != null,
         )
         val menu = VideoMenuPresenter.instance(activity)
-        return availableVideoActions(section, facts, inContinue).map { action ->
+        return availableVideoActions(section, facts, inContinue).filter { canMarkWatched || it != VideoAction.MARK_WATCHED }.map { action ->
             when (action) {
                 VideoAction.QUEUE -> MenuItem(activity.getString(R.string.material_video_queue)) {
                     menu.addToQueue(video, null)
