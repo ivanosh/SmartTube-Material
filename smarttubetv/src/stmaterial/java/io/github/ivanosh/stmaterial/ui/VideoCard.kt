@@ -246,6 +246,7 @@ private class CardBake(private val face: CardFace) : BitmapTransformation() {
 }
 
 private val TitleTypeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+private val WatchedProgress = android.graphics.Color.rgb(0xFF, 0x00, 0x33)
 private val OnBackground = Palette.OnBackground.toArgb()
 private val OnBackgroundVariant = Palette.OnBackgroundVariant.toArgb()
 
@@ -267,7 +268,8 @@ private fun bakeCard(out: Bitmap, thumbnail: Bitmap?, face: CardFace, tone: Int)
         val bar = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP) }
         bar.color = Palette.ProgressTrack.toArgb()
         canvas.drawRect(0f, top, thumb.right, thumb.bottom, bar)
-        bar.color = Palette.Accent.toArgb()
+        // YouTube red: the pale accent got lost on light thumbnails, and red reads as "watched" at a glance.
+        bar.color = WatchedProgress
         canvas.drawRect(0f, top, thumb.right * face.progress, thumb.bottom, bar)
     }
 
