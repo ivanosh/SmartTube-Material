@@ -35,8 +35,14 @@ import androidx.compose.ui.unit.dp
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup
 import com.liskovsoft.smartyoutubetv2.tv.R
 import io.github.ivanosh.stmaterial.logic.BackStep
+import io.github.ivanosh.stmaterial.logic.DownloadPhase
+import io.github.ivanosh.stmaterial.logic.PillAction
+import io.github.ivanosh.stmaterial.logic.PillLabel
 import io.github.ivanosh.stmaterial.logic.Sections
 import io.github.ivanosh.stmaterial.logic.backStep
+import io.github.ivanosh.stmaterial.logic.pillAction
+import io.github.ivanosh.stmaterial.logic.pillView
+import io.github.ivanosh.stmaterial.logic.pillVisible
 import io.github.ivanosh.stmaterial.ui.CenteredMessage
 import io.github.ivanosh.stmaterial.ui.ErrorState
 import io.github.ivanosh.stmaterial.ui.Feed
@@ -46,8 +52,12 @@ import io.github.ivanosh.stmaterial.ui.rememberCardMenuHost
 import io.github.ivanosh.stmaterial.ui.MessageLine
 import io.github.ivanosh.stmaterial.ui.MaterialTvTheme
 import io.github.ivanosh.stmaterial.ui.Palette
+import io.github.ivanosh.stmaterial.ui.InstallPermissionPanel
 import io.github.ivanosh.stmaterial.ui.TabItem
 import io.github.ivanosh.stmaterial.ui.Tabs
+import io.github.ivanosh.stmaterial.ui.UpdatePanel
+import io.github.ivanosh.stmaterial.ui.UpdatePillState
+import io.github.ivanosh.stmaterial.update.UpdateDownload
 import io.github.ivanosh.stmaterial.update.UpdateStore
 
 interface BrowseActions : FeedPageActions {
@@ -57,6 +67,12 @@ interface BrowseActions : FeedPageActions {
     fun onHide(id: Int)
     fun onCustomize()
     fun onErrorAction(error: ErrorData)
+    /** Starts (or Retries) the one shared download of the offer on show. */
+    fun onUpdateStart()
+    /** Whether the app may already install packages; false opens the permission panel instead of a download. */
+    fun canInstallUpdates(): Boolean
+    /** Opens the system screen that grants installing unknown apps. */
+    fun onOpenInstallSettings()
 }
 
 private const val TABS_ANIMATION_MS = 200
@@ -86,6 +102,9 @@ fun BrowseScreen(state: BrowseState, actions: BrowseActions) {
         var tabBackPressed by remember { mutableStateOf(false) }
         // The tab whose menu is open, and the tab that gets focus back when it closes.
         var menuFor by remember { mutableStateOf<Int?>(null) }
+        // The update panels over the screen: the running download's, and the install-permission one.
+        var updatePanel by remember { mutableStateOf(false) }
+        var permissionPanel by remember { mutableStateOf(false) }
         // The menu of a card. Focus comes back to the card through the state, as it does after any loss of focus.
         val cardMenu = rememberCardMenuHost(state, actions)
 
@@ -97,8 +116,11 @@ fun BrowseScreen(state: BrowseState, actions: BrowseActions) {
 
         // Nothing holds focus: the first frame, or what had it is gone (error replaced, card removed,
         // section cleared). A card takes it back if there is one, otherwise the selected tab.
-        val orphaned = !barFocused && !contentFocused && menuFor == null && cardMenu.items == null
+        val orphaned = !barFocused && !contentFocused && menuFor == null && cardMenu.items == null &&
+            !updatePanel && !permissionPanel
         CardFocusEffects(state, cardMenu, orphaned, hasTargets = state.tabs().isNotEmpty(), fallback = ::focusTabs)
+        // A download that ends while its panel is open closes the panel, so a later run does not reopen it.
+        LaunchedEffect(UpdateDownload.active) { if (!UpdateDownload.active) updatePanel = false }
 
         var menuClosedOn by remember { mutableStateOf<Int?>(null) }
         LaunchedEffect(menuFor) {
@@ -119,6 +141,34 @@ fun BrowseScreen(state: BrowseState, actions: BrowseActions) {
         val tabsVisible by remember(state) { derivedStateOf { state.tabsVisible } }
         val tabsAway = animateFloatAsState(if (tabsVisible) 0f else 1f, tween(TABS_ANIMATION_MS), label = "tabsAway")
         val searchTitle = stringResource(R.string.material_search)
+        // The Update pill. Its visibility turns on an offer or a run (both rare), so the bar recomposes seldom;
+        // the label and ring read the live phase and percent inside the pill, so a download repaints only it.
+        val updateLabel = stringResource(R.string.material_update_pill)
+        val preparingLabel = stringResource(R.string.material_update_pill_preparing)
+        val installLabel = stringResource(R.string.material_update_pill_install)
+        val retryLabel = stringResource(R.string.material_update_pill_retry)
+        val percentTemplate = stringResource(R.string.material_update_pill_percent)
+        val updatePill = if (pillVisible(UpdateStore.shown != null, UpdateDownload.phase)) {
+            UpdatePillState(
+                label = {
+                    when (pillView(UpdateDownload.phase, UpdateDownload.percent).label) {
+                        PillLabel.UPDATE -> updateLabel
+                        PillLabel.PERCENT -> percentTemplate.format(UpdateDownload.percent)
+                        PillLabel.PREPARING -> preparingLabel
+                        PillLabel.INSTALL -> installLabel
+                        PillLabel.RETRY -> retryLabel
+                    }
+                },
+                ring = { pillView(UpdateDownload.phase, UpdateDownload.percent).ring },
+                onClick = {
+                    when (pillAction(UpdateDownload.phase)) {
+                        PillAction.OPEN_PANEL -> updatePanel = true
+                        // OK starts the download at once; no permission to install opens the panel instead.
+                        PillAction.START -> if (actions.canInstallUpdates()) actions.onUpdateStart() else permissionPanel = true
+                    }
+                },
+            )
+        } else null
         val tabs = state.tabs().map { id ->
             val title = if (id == Sections.SEARCH_SECTION_ID) searchTitle else state.sections.firstOrNull { it.id == id }?.title.orEmpty()
             TabItem(id, title, id == state.start)
@@ -129,8 +179,9 @@ fun BrowseScreen(state: BrowseState, actions: BrowseActions) {
                 .fillMaxSize()
                 .background(Palette.Background)
                 .onPreviewKeyEvent { event ->
-                    // Back on a tab that is not the start tab goes to the start tab. Menus keep their own Back.
+                    // Back on a tab that is not the start tab goes to the start tab. Menus and panels keep their own Back.
                     if (event.key == Key.Back && menuFor == null && cardMenu.items == null &&
+                        !updatePanel && !permissionPanel &&
                         backStep(contentFocused, state.selected, state.start, state.tabs()) == BackStep.SELECT_START
                     ) {
                         when (event.type) {
@@ -183,12 +234,14 @@ fun BrowseScreen(state: BrowseState, actions: BrowseActions) {
                 },
                 onClick = actions::onTabClicked,
                 onLongPress = { menuFor = it },
-                updateAvailable = { UpdateStore.shown != null },
+                updatePill = updatePill,
                 modifier = Modifier
                     .onFocusChanged { barFocused = it.hasFocus }
                     .graphicsLayer { translationY = -TabsTravel.toPx() * tabsAway.value },
             )
-            state.message?.let { MessageLine(it, Modifier.align(Alignment.BottomCenter)) }
+            // A failed download reports itself on the message line, over any transient screen message.
+            val updateError = if (UpdateDownload.phase == DownloadPhase.FAILED) UpdateDownload.message else null
+            (updateError ?: state.message)?.let { MessageLine(it, Modifier.align(Alignment.BottomCenter)) }
             cardMenu.items?.let { items ->
                 ContextMenu(items = items, onDismiss = cardMenu::dismiss)
             }
@@ -211,6 +264,30 @@ fun BrowseScreen(state: BrowseState, actions: BrowseActions) {
                         menuFor = null
                     },
                     alignEnd = id == MediaGroup.TYPE_SETTINGS,
+                )
+            }
+            val panelOffer = UpdateDownload.offer ?: UpdateStore.shown
+            if (updatePanel && UpdateDownload.active && panelOffer != null) {
+                UpdatePanel(
+                    panelOffer,
+                    onHide = { updatePanel = false },
+                    onCancel = {
+                        UpdateDownload.cancel()
+                        updatePanel = false
+                    },
+                )
+            }
+            if (permissionPanel) {
+                InstallPermissionPanel(
+                    title = stringResource(R.string.material_update_perm_title),
+                    message = stringResource(R.string.material_update_perm_message),
+                    openLabel = stringResource(R.string.material_update_perm_open),
+                    closeLabel = stringResource(R.string.material_update_close),
+                    onOpen = {
+                        actions.onOpenInstallSettings()
+                        permissionPanel = false
+                    },
+                    onClose = { permissionPanel = false },
                 )
             }
         }

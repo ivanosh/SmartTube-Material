@@ -191,6 +191,17 @@
     <string translatable="false" name="material_update_download_failed">The download failed. Nothing was installed.</string>
     <string translatable="false" name="material_update_not_installed">Not installed</string>
     <string translatable="false" name="material_update_channel_changed">This update is not offered on the channel chosen now.</string>
+    <!-- The Update pill in the top bar, left of the gear, and its panel. -->
+    <string translatable="false" name="material_update_pill">Update</string>
+    <string translatable="false" name="material_update_pill_percent">%1$d%%</string>
+    <string translatable="false" name="material_update_pill_preparing">Preparing</string>
+    <string translatable="false" name="material_update_pill_install">Install</string>
+    <string translatable="false" name="material_update_pill_retry">Retry</string>
+    <string translatable="false" name="material_update_panel_hide">Hide</string>
+    <string translatable="false" name="material_update_panel_cancel">Cancel download</string>
+    <string translatable="false" name="material_update_perm_title">Allow installing updates</string>
+    <string translatable="false" name="material_update_perm_message">To install updates, allow this app to install unknown apps in the system settings, then start the update again.</string>
+    <string translatable="false" name="material_update_perm_open">Open settings</string>
     <string translatable="false" name="material_channel_subscribe">Subscribe</string>
     <string translatable="false" name="material_channel_subscribed">Subscribed</string>
     <string translatable="false" name="material_channel_sign_in_to_subscribe">Sign in to subscribe</string>

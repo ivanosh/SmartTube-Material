@@ -1,9 +1,12 @@
 package io.github.ivanosh.stmaterial.browse
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import androidx.compose.ui.platform.ComposeView
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup
 import io.github.ivanosh.stmaterial.ui.MenuItem
@@ -30,7 +33,9 @@ import io.github.ivanosh.stmaterial.logic.SignedOutNotice
 import io.github.ivanosh.stmaterial.logic.signedOutNotice
 import io.github.ivanosh.stmaterial.logic.resolveStart
 import io.github.ivanosh.stmaterial.settings.MaterialSettingsActivity
+import io.github.ivanosh.stmaterial.update.UpdateDownload
 import io.github.ivanosh.stmaterial.update.UpdateScheduler
+import io.github.ivanosh.stmaterial.update.UpdateStore
 import com.liskovsoft.smartyoutubetv2.tv.R
 
 /**
@@ -99,6 +104,26 @@ class MaterialBrowseActivity : LeanbackActivity(), BrowseView {
                 state.clearContent()
                 state.loading = true
                 presenter.refresh(false)
+            }
+        }
+
+        override fun onUpdateStart() {
+            val offer = UpdateStore.shown ?: UpdateDownload.offer ?: return
+            UpdateDownload.start(this@MaterialBrowseActivity, offer)
+        }
+
+        override fun canInstallUpdates(): Boolean = packageManager.canRequestPackageInstalls()
+
+        override fun onOpenInstallSettings() {
+            // The per-app screen, then the generic one, in case a TV does not have the first.
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+            } catch (e: ActivityNotFoundException) {
+                try {
+                    startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES))
+                } catch (e: ActivityNotFoundException) {
+                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                }
             }
         }
 
@@ -204,6 +229,8 @@ class MaterialBrowseActivity : LeanbackActivity(), BrowseView {
         handler.removeCallbacks(endReload)
         history.dispose()
         presenter.onViewDestroyed()
+        // A download begun from the pill is bound to this activity; it goes when the activity does.
+        UpdateDownload.releaseHost(this)
     }
 
     /** The selection shows at once. The load waits, so holding the key does not load every tab it passes. */

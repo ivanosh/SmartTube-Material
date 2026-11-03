@@ -26,8 +26,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
@@ -53,9 +53,16 @@ private const val HOME_ICON = "M4 11l8-7 8 7M6 10v10h12V10"
 // A gear outline: eight teeth around a hub ring. Drawn with a 2 stroke it still shows teeth at 36 px.
 private const val GEAR_ICON = "M10.0 4.7L10.4 1.7L13.6 1.7L14.0 4.7L15.8 5.4L18.1 3.6L20.4 5.9L18.6 8.2L19.3 10.0L22.3 10.4L22.3 13.6L19.3 14.0L18.6 15.8L20.4 18.1L18.1 20.4L15.8 18.6L14.0 19.3L13.6 22.3L10.4 22.3L10.0 19.3L8.2 18.6L5.9 20.4L3.6 18.1L5.4 15.8L4.7 14.0L1.7 13.6L1.7 10.4L4.7 10.0L5.4 8.2L3.6 5.9L5.9 3.6L8.2 5.4zM15.2 12a3.2 3.2 0 1 0-6.4 0 3.2 3.2 0 0 0 6.4 0z"
 
+private const val DOWNLOAD_ICON = "M12 3L12 14M7 9L12 14L17 9M5 20L19 20"
+
 private val GEAR_SLOT = 80.dp
+// The width the Update pill is kept clear of, left of the gear, so the last tab never slides under it.
+private val PILL_SLOT = 240.dp
 private val PillShape = RoundedCornerShape(32.dp)
 private val LabelStyle = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Medium)
+
+/** The Update pill, drawn left of the gear. [label] and [ring] are read as a run advances; a null state hides it. */
+class UpdatePillState(val label: () -> String, val ring: () -> Float?, val onClick: () -> Unit)
 
 /**
  * The bar of the canvas: the tabs on the left and the Settings icon, outside the list, on the right.
@@ -71,8 +78,8 @@ fun Tabs(
     onFocused: (Int) -> Unit,
     onClick: (Int) -> Unit,
     onLongPress: (Int) -> Unit,
-    /** Read only when the dot is drawn, so a change repaints the dot and does not recompose the bar. */
-    updateAvailable: () -> Boolean = { false },
+    /** The Update pill left of the gear, or null when no update is on offer and none is being downloaded. */
+    updatePill: UpdatePillState? = null,
     modifier: Modifier = Modifier,
 ) {
     // The 8 dp inside the list keeps the focus ring of the first and last tab out of the scroll clip;
@@ -94,7 +101,7 @@ fun Tabs(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(end = GEAR_SLOT)
+                .padding(end = GEAR_SLOT + if (updatePill != null) PILL_SLOT else 0.dp)
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 8.dp)
                 .align(Alignment.CenterStart),
@@ -134,15 +141,63 @@ fun Tabs(
         ) {
             StrokeIcon(GEAR_ICON, Palette.OnBackgroundVariant, Modifier.fillMaxSize().padding(14.dp))
         }
-        // The mark of an update that has arrived: a filled dot at the top right of the gear, focused or not.
-        Box(
-            Modifier.align(Alignment.CenterEnd).size(64.dp).drawBehind {
-                if (updateAvailable()) {
-                    val r = 6.dp.toPx()
-                    drawCircle(Palette.Accent, r, Offset(size.width - 14.dp.toPx() - r, 14.dp.toPx() + r))
-                }
-            }
-        )
+        // The mark of an update on offer or downloading: a pill just left of the gear. D-pad right from the last
+        // tab reaches it, then the gear.
+        if (updatePill != null) {
+            UpdatePill(updatePill, Modifier.align(Alignment.CenterEnd).padding(end = GEAR_SLOT))
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun UpdatePill(pill: UpdatePillState, modifier: Modifier) {
+    var focused by remember { mutableStateOf(false) }
+    // A light accent tint at rest, the full accent when focused: the one call to action on the bar.
+    val container = if (focused) Palette.Accent else Palette.Accent.copy(alpha = 0.16f)
+    val content = if (focused) Palette.Background else Palette.Accent
+    Surface(
+        onClick = pill.onClick,
+        modifier = modifier
+            .height(64.dp)
+            .focusRing(focused, corner = 32.dp, gap = 2.dp)
+            .onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(PillShape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = container,
+            contentColor = content,
+            focusedContainerColor = container,
+            focusedContentColor = content,
+            pressedContainerColor = container,
+            pressedContentColor = content,
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f, pressedScale = 1f),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 24.dp).fillMaxHeight(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PillIcon(pill.ring, content)
+            Text(pill.label(), style = LabelStyle, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
+/** The download arrow with a ring that fills as the download runs. The ring is read in the draw, so a percent repaints it. */
+@Composable
+private fun PillIcon(ring: () -> Float?, color: Color) {
+    Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val fraction = ring() ?: return@Canvas
+            val inset = 2f
+            val stroke = Stroke(width = 3f, cap = StrokeCap.Round)
+            val topLeft = Offset(inset, inset)
+            val arcSize = Size(size.width - 2 * inset, size.height - 2 * inset)
+            drawArc(color.copy(alpha = 0.3f), -90f, 360f, false, topLeft, arcSize, style = stroke)
+            drawArc(color, -90f, 360f * fraction.coerceIn(0f, 1f), false, topLeft, arcSize, style = stroke)
+        }
+        StrokeIcon(DOWNLOAD_ICON, color, Modifier.size(20.dp))
     }
 }
 
