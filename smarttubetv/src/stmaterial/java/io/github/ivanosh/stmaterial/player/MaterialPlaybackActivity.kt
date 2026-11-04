@@ -64,6 +64,9 @@ import io.github.ivanosh.stmaterial.logic.chapterIndexAt
 import io.github.ivanosh.stmaterial.logic.chapterStartAt
 import io.github.ivanosh.stmaterial.logic.playerKey
 import io.github.ivanosh.stmaterial.logic.withChapters
+import io.github.ivanosh.stmaterial.logic.withDescription
+import io.github.ivanosh.stmaterial.logic.DescriptionStep
+import io.github.ivanosh.stmaterial.logic.descriptionKey
 import io.github.ivanosh.stmaterial.logic.withUpNext
 import io.github.ivanosh.stmaterial.logic.endOfVideoFocus
 import io.github.ivanosh.stmaterial.logic.goneCards
@@ -142,7 +145,7 @@ class MaterialPlaybackActivity : PlaybackActivity() {
             // A dialog over the panel holds the timer; it starts again when the dialog closes.
             if (!hasWindowFocus()) lastKeyMs = now
             val view = player
-            if (view != null && !isSheetOpen && shouldAutoHide(ui, view.playWhenReady, now - lastKeyMs, modal = menuKeepsPanel(panel.menu != null || panel.cardMenu != null, panel.moving))) {
+            if (view != null && !isSheetOpen && shouldAutoHide(ui, view.playWhenReady, now - lastKeyMs, modal = menuKeepsPanel(panel.menu != null || panel.cardMenu != null || panel.descriptionOpen, panel.moving))) {
                 setUi(ui.copy(focus = PanelFocus.HIDDEN))
             }
             if (now >= seekPreviewUntilMs) panel.seekPreview = false
@@ -251,7 +254,7 @@ class MaterialPlaybackActivity : PlaybackActivity() {
         val sheet = isSheetOpen
         // A dialog is its own activity and window, so its keys never get here; this guards a window that took focus anyway.
         val focused = hasWindowFocus()
-        if (panel.moving || panel.menu != null || panel.cardMenu != null) return modalKey(key, event)
+        if (panel.moving || panel.menu != null || panel.cardMenu != null || panel.descriptionOpen) return modalKey(key, event)
         if (key == PlayerKey.Left && ui.focus == PanelFocus.HIDDEN && !sheet && focused) {
             // The undo chip: LEFT goes back to the start of the skipped segment, and not a step more.
             if (event.repeatCount == 0) undoKeyHeld = false
@@ -317,6 +320,10 @@ class MaterialPlaybackActivity : PlaybackActivity() {
                     panel.positionMs = start
                 }
                 is PlayerCommand.OpenUpNext -> panel.upNext.getOrNull(command.index)?.let(presenter::onSuggestionItemClicked)
+                PlayerCommand.OpenDescription -> {
+                    panel.descriptionScroll = 0
+                    panel.descriptionOpen = true
+                }
                 PlayerCommand.Exit -> {
                     sendSeekNow()
                     passBackOn = true
@@ -440,6 +447,12 @@ class MaterialPlaybackActivity : PlaybackActivity() {
         seek = SeekDebounce()
         setChapters(emptyList())
         setUpNext(emptyList())
+        // The previous video's description must not show while the new one's metadata loads.
+        panel.descriptionOpen = false
+        panel.descriptionScroll = 0
+        panel.description = ""
+        panel.metadata = ""
+        writeUi(withDescription(ui, false))
         rowLostIndex = null
         ledger.clear()
         watch = RewindWatch()
@@ -645,6 +658,18 @@ class MaterialPlaybackActivity : PlaybackActivity() {
         val now = SystemClock.uptimeMillis()
         if (!repeating) presenter.onKeyDown(NO_KEY)
         lastKeyMs = now
+        if (panel.descriptionOpen) {
+            // Up and Down scroll (and repeat); OK and Back close. The view clamps the scroll to the content.
+            val steps = key == PlayerKey.Up || key == PlayerKey.Down
+            if (repeating && (!steps || repeatGuard.shouldDrop(event.repeatCount, event.eventTime, now))) return true
+            val (scroll, step) = descriptionKey(panel.descriptionScroll, key)
+            panel.descriptionScroll = scroll
+            if (step == DescriptionStep.Close) {
+                panel.descriptionOpen = false
+                panel.descriptionScroll = 0
+            }
+            return true
+        }
         panel.cardMenu?.let { open ->
             val steps = key == PlayerKey.Up || key == PlayerKey.Down
             if (repeating && (!steps || repeatGuard.shouldDrop(event.repeatCount, event.eventTime, now))) return true
@@ -734,6 +759,8 @@ class MaterialPlaybackActivity : PlaybackActivity() {
             panel.sheetGroups = null
             panel.menu = null
             panel.cardMenu = null
+            panel.descriptionOpen = false
+            panel.descriptionScroll = 0
             endMove()
             okHold = okHold.reset()
         }
@@ -794,6 +821,13 @@ class MaterialPlaybackActivity : PlaybackActivity() {
         panel.author = view.video?.author.orEmpty()
         panel.durationMs = view.durationMs
         panel.playing = view.playWhenReady
+        // The description and the metadata line arrive with the rest of the metadata, after the video; this reads them
+        // on open and whenever a video's data comes in. The focus follows the description appearing or going.
+        panel.metadata = view.panelMetadata
+        val description = view.panelDescription
+        panel.description = description
+        val present = description.isNotBlank()
+        if (ui.descriptionPresent != present) writeUi(withDescription(ui, present))
     }
 
     private fun startTicking() {

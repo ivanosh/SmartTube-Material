@@ -42,6 +42,14 @@ class PlayerOverlayState {
     var title by mutableStateOf("")
     var author by mutableStateOf("")
     var chapter by mutableStateOf<String?>(null)
+    /** The view count and published date under the title, already assembled ("1.2M views • 2 years ago"); blank when unknown. */
+    var metadata by mutableStateOf("")
+    /** The full video description, blank until it has loaded or when the video has none. */
+    var description by mutableStateOf("")
+    /** The full, scrollable description stands over the panel. */
+    var descriptionOpen by mutableStateOf(false)
+    /** How far the open description has scrolled, in steps; the view clamps it to the content. */
+    var descriptionScroll by mutableIntStateOf(0)
     var positionMs by mutableLongStateOf(0)
     var durationMs by mutableLongStateOf(0)
     var playing by mutableStateOf(true)

@@ -1,12 +1,14 @@
 package io.github.ivanosh.stmaterial.logic
 
-enum class PanelFocus { HIDDEN, PROGRESS, BUTTONS, CHAPTERS, UPNEXT }
+enum class PanelFocus { HIDDEN, PROGRESS, BUTTONS, CHAPTERS, DESCRIPTION, UPNEXT }
 
 enum class PlayerKey { Up, Down, Left, Right, Ok, Back }
 
 /**
  * [buttonCount] counts the buttons on the panel and More, which is always the last one. [chapterCount] is the length
  * of the chapter row (0: none), [currentChapter] the chapter the position is in (-1: none), [chapterIndex] the card in focus.
+ * [descriptionPresent] is whether the video has a description, which sits as a focusable preview between the chapter
+ * row and the Up next row.
  */
 data class PlayerUi(
     val focus: PanelFocus,
@@ -18,6 +20,7 @@ data class PlayerUi(
     /** The length of the Up next row (0: none) and the card in focus. */
     val upNextCount: Int = 0,
     val upNextIndex: Int = 0,
+    val descriptionPresent: Boolean = false,
 )
 
 sealed interface PlayerCommand {
@@ -28,6 +31,8 @@ sealed interface PlayerCommand {
     object OpenMore : PlayerCommand
     data class SeekToChapter(val index: Int) : PlayerCommand
     data class OpenUpNext(val index: Int) : PlayerCommand
+    /** Open the scrollable full description over the panel. */
+    object OpenDescription : PlayerCommand
 }
 
 /** The key table of the player. Every key event gives its own result, so a held key never queues anything here. */
@@ -54,10 +59,7 @@ fun playerKey(ui: PlayerUi, key: PlayerKey, seekStepMs: Long): Pair<PlayerUi, Li
                 if (ui.buttonIndex == ui.buttonCount - 1) PlayerCommand.OpenMore else PlayerCommand.Press(ui.buttonIndex)
             )
             PlayerKey.Up -> ui.copy(focus = PanelFocus.PROGRESS) to emptyList()
-            PlayerKey.Down ->
-                if (ui.chapterCount > 0) ui.copy(focus = PanelFocus.CHAPTERS, chapterIndex = ui.currentChapter.coerceIn(0, ui.chapterCount - 1)) to emptyList()
-                else if (ui.upNextCount > 0) ui.copy(focus = PanelFocus.UPNEXT) to emptyList()
-                else ui to emptyList()
+            PlayerKey.Down -> rowBelowButtons(ui) to emptyList()
             PlayerKey.Left -> ui.copy(buttonIndex = (ui.buttonIndex - 1).coerceAtLeast(0)) to emptyList()
             PlayerKey.Right -> ui.copy(buttonIndex = (ui.buttonIndex + 1).coerceAtMost(ui.buttonCount - 1)) to emptyList()
             PlayerKey.Back -> ui.copy(focus = PanelFocus.HIDDEN) to emptyList()
@@ -65,19 +67,45 @@ fun playerKey(ui: PlayerUi, key: PlayerKey, seekStepMs: Long): Pair<PlayerUi, Li
         PanelFocus.CHAPTERS -> when (key) {
             PlayerKey.Ok -> ui.copy(focus = PanelFocus.BUTTONS) to listOf(PlayerCommand.SeekToChapter(ui.chapterIndex))
             PlayerKey.Up, PlayerKey.Back -> ui.copy(focus = PanelFocus.BUTTONS) to emptyList()
-            PlayerKey.Down -> (if (ui.upNextCount > 0) ui.copy(focus = PanelFocus.UPNEXT) else ui) to emptyList()
+            PlayerKey.Down ->
+                if (ui.descriptionPresent) ui.copy(focus = PanelFocus.DESCRIPTION) to emptyList()
+                else if (ui.upNextCount > 0) ui.copy(focus = PanelFocus.UPNEXT) to emptyList()
+                else ui to emptyList()
             PlayerKey.Left -> ui.copy(chapterIndex = (ui.chapterIndex - 1).coerceAtLeast(0)) to emptyList()
             PlayerKey.Right -> ui.copy(chapterIndex = (ui.chapterIndex + 1).coerceAtMost((ui.chapterCount - 1).coerceAtLeast(0))) to emptyList()
         }
-        // Up and Back go up one row, to the chapter card or the button that was left, which the state still holds.
+        // The description preview between the rows. OK opens the full, scrollable description over the panel; Left and
+        // Right do nothing, since it is one block. Up and Back go to the chapter row or the button that was left.
+        PanelFocus.DESCRIPTION -> when (key) {
+            PlayerKey.Ok -> ui to listOf(PlayerCommand.OpenDescription)
+            PlayerKey.Up, PlayerKey.Back -> ui.copy(focus = if (ui.chapterCount > 0) PanelFocus.CHAPTERS else PanelFocus.BUTTONS) to emptyList()
+            PlayerKey.Down -> (if (ui.upNextCount > 0) ui.copy(focus = PanelFocus.UPNEXT) else ui) to emptyList()
+            PlayerKey.Left, PlayerKey.Right -> ui to emptyList()
+        }
+        // Up and Back go up one row, to the description, the chapter card or the button that was left, which the state still holds.
         PanelFocus.UPNEXT -> when (key) {
             PlayerKey.Ok -> ui.copy(focus = PanelFocus.HIDDEN) to listOf(PlayerCommand.OpenUpNext(ui.upNextIndex))
-            PlayerKey.Up, PlayerKey.Back -> ui.copy(focus = if (ui.chapterCount > 0) PanelFocus.CHAPTERS else PanelFocus.BUTTONS) to emptyList()
+            PlayerKey.Up, PlayerKey.Back -> ui.copy(focus = focusAboveUpNext(ui)) to emptyList()
             PlayerKey.Down -> ui to emptyList()
             PlayerKey.Left -> ui.copy(upNextIndex = (ui.upNextIndex - 1).coerceAtLeast(0)) to emptyList()
             PlayerKey.Right -> ui.copy(upNextIndex = (ui.upNextIndex + 1).coerceAtMost((ui.upNextCount - 1).coerceAtLeast(0))) to emptyList()
         }
     }
+
+/** Down from the buttons: the chapter row, else the description preview, else the Up next row, else nowhere. */
+private fun rowBelowButtons(ui: PlayerUi): PlayerUi = when {
+    ui.chapterCount > 0 -> ui.copy(focus = PanelFocus.CHAPTERS, chapterIndex = ui.currentChapter.coerceIn(0, ui.chapterCount - 1))
+    ui.descriptionPresent -> ui.copy(focus = PanelFocus.DESCRIPTION)
+    ui.upNextCount > 0 -> ui.copy(focus = PanelFocus.UPNEXT)
+    else -> ui
+}
+
+/** The row above Up next: the description preview, else the chapter row, else the buttons. */
+private fun focusAboveUpNext(ui: PlayerUi): PanelFocus = when {
+    ui.descriptionPresent -> PanelFocus.DESCRIPTION
+    ui.chapterCount > 0 -> PanelFocus.CHAPTERS
+    else -> PanelFocus.BUTTONS
+}
 
 const val SEEK_DEBOUNCE_MS = 300L
 const val PANEL_AUTO_HIDE_MS = 5_000L
@@ -123,9 +151,13 @@ fun magnet(from: Long, to: Long, chapterStartsMs: List<Long>, stoppedOn: Long? =
     }
 }
 
-/** A paused video keeps the panel open, and so does focus in the chapter row or the Up next row, a button menu or Move ([modal]). */
+/**
+ * A paused video keeps the panel open, and so does focus in the chapter row, the description preview or the Up next
+ * row, a button menu or Move ([modal]).
+ */
 fun shouldAutoHide(ui: PlayerUi, playing: Boolean, idleMs: Long, modal: Boolean = false): Boolean =
-    !modal && ui.focus != PanelFocus.HIDDEN && ui.focus != PanelFocus.CHAPTERS && ui.focus != PanelFocus.UPNEXT && playing && idleMs >= PANEL_AUTO_HIDE_MS
+    !modal && ui.focus != PanelFocus.HIDDEN && ui.focus != PanelFocus.CHAPTERS && ui.focus != PanelFocus.DESCRIPTION &&
+        ui.focus != PanelFocus.UPNEXT && playing && idleMs >= PANEL_AUTO_HIDE_MS
 
 const val SEEK_KEEPS_FOCUS_MS = 2_000L
 

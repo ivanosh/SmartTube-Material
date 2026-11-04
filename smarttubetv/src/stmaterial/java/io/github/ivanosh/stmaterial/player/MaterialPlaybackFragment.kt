@@ -15,6 +15,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegme
 import com.liskovsoft.smartyoutubetv2.tv.ui.playback.PlaybackFragment
 import io.github.ivanosh.stmaterial.logic.SkipSpan
 import io.github.ivanosh.stmaterial.logic.chooseUpNext
+import io.github.ivanosh.stmaterial.logic.metadataLine
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -176,6 +177,23 @@ class MaterialPlaybackFragment : PlaybackFragment() {
     private fun rememberTitle(video: Video?) {
         video?.titleFull?.ifBlank { null }?.let { lastTitle = it }
     }
+
+    /**
+     * The full description of the current video. Empty until the metadata has loaded (`video.description` is filled
+     * then) or when the video has none; the panel shows the preview only once it is non-empty.
+     */
+    val panelDescription: String
+        get() = video?.description.orEmpty()
+
+    /**
+     * The metadata to show under the title and author: the view count and the published date from the video's second
+     * title, with the author dropped (it is on its own line). Empty until the metadata has loaded.
+     */
+    val panelMetadata: String
+        get() {
+            val current = video ?: return ""
+            return metadataLine(current.secondTitleFull?.toString(), current.author)
+        }
 
     /**
      * What the presenter sets for a button goes to the panel and to More, which show it. The hidden

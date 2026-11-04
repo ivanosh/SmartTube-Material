@@ -150,7 +150,7 @@ fun PlayerOverlay(state: PlayerOverlayState) {
                     .drawWithCache {
                         // State is read in the cache block: the gradient is built when the layout or the open row changes,
                         // and the bar's redraw at every tick only draws it.
-                        val brush = scrimBrush(state.barTopPx, state.focus == PanelFocus.CHAPTERS || state.focus == PanelFocus.UPNEXT)
+                        val brush = scrimBrush(state.barTopPx, state.focus == PanelFocus.CHAPTERS || state.focus == PanelFocus.DESCRIPTION || state.focus == PanelFocus.UPNEXT)
                         onDrawBehind { drawScrim(brush) }
                     }
                     .padding(start = 58.dp, end = 58.dp, top = 36.dp, bottom = 40.dp)
@@ -166,10 +166,12 @@ fun PlayerOverlay(state: PlayerOverlayState) {
                 }
                 Box(Modifier.onlyWhenOpen(state).padding(top = 24.dp)) { Buttons(state) }
                 ChapterRow(state)
+                DescriptionPreview(state)
                 UpNextRow(state)
             }
         }
         MoreSheet(state)
+        DescriptionSheet(state)
         // A hold on an Up next card: the menu stands over the middle of the screen.
         state.cardMenu?.let { Box(Modifier.align(Alignment.Center)) { PickMenuCard(it) } }
         // A hold on a line of More: the menu stands to the left of the sheet.
@@ -256,12 +258,17 @@ private fun SeekChapterTitle(state: PlayerOverlayState) {
     Text(title, style = subtitleStyle.copy(color = Palette.OnBackground), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 12.dp))
 }
 
+private val metaStyle = TextStyle(fontSize = 24.sp, lineHeight = 32.sp, color = Palette.OnBackgroundVariant)
+
 @Composable
 private fun Header(state: PlayerOverlayState) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(state.title, style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // The author, and the current chapter when there is one, so the chapter name is not lost under the metadata.
         val subtitle = listOfNotNull(state.author.ifBlank { null }, state.chapter?.ifBlank { null }).joinToString(" · ")
-        Text(subtitle, style = subtitleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (subtitle.isNotEmpty()) Text(subtitle, style = subtitleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // The view count and the published date, once the metadata has loaded; nothing composed until then.
+        if (state.metadata.isNotEmpty()) Text(state.metadata, style = metaStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
