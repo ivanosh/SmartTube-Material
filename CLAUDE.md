@@ -82,7 +82,7 @@ scripts/perf.sh <serial> [runs]                                                 
   from the browse screen and on request; no WorkManager.
 - D-pad only. A gesture that needs a long press must have a visible alternative (the editors are reachable from Settings).
 - Limits: 8 tabs (`Sections.LIMIT`, Settings is outside the count); 8 player buttons plus More (`PANEL_LIMIT`); the default
-  eight are the old five plus Like, Dislike, Subscribe.
+  panel is the old five plus the combined Rate button and Subscribe (Like and Dislike stay in the editor to split out).
 - English is the only UI language. All UI text in English.
 - The account token is never in shared storage or backups: `allowBackup="false"`, and the token is not exported. The sync gate and
   the updater guard this.

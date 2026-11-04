@@ -1,6 +1,6 @@
 package io.github.ivanosh.stmaterial.logic
 
-enum class MenuAction { OpenChannel, Move, Remove, Customize, AddToPanel }
+enum class MenuAction { OpenChannel, ChooseTrack, Dislike, Move, Remove, Customize, AddToPanel }
 
 /**
  * The small menu of a hold on a panel button. [anchor] is the button's place on the panel, or its entry in More when
@@ -20,10 +20,16 @@ sealed interface MenuStep {
     data class Choose(val action: MenuAction) : MenuStep
 }
 
-/** The items for a button on the panel, or for More itself ([button] null). Only Subscribe has a special action. */
+/**
+ * The items for a button on the panel, or for More itself ([button] null). A few buttons lead with a secondary
+ * action: Subscribe opens the channel, Subtitles opens the track picker, Rate toggles Dislike. The rest, and these
+ * after their first item, offer the panel-management actions.
+ */
 fun panelMenuActions(button: PlayerButton?): List<MenuAction> = when (button) {
     null -> listOf(MenuAction.Customize)
     PlayerButton.Subscribe -> listOf(MenuAction.OpenChannel, MenuAction.Move, MenuAction.Remove, MenuAction.Customize)
+    PlayerButton.Subtitles -> listOf(MenuAction.ChooseTrack, MenuAction.Move, MenuAction.Remove, MenuAction.Customize)
+    PlayerButton.Rate -> listOf(MenuAction.Dislike, MenuAction.Move, MenuAction.Remove, MenuAction.Customize)
     else -> listOf(MenuAction.Move, MenuAction.Remove, MenuAction.Customize)
 }
 

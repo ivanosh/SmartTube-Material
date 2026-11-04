@@ -96,6 +96,7 @@
     <string translatable="false" name="material_btn_previous">Previous</string>
     <string translatable="false" name="material_btn_like">Like</string>
     <string translatable="false" name="material_btn_dislike">Dislike</string>
+    <string translatable="false" name="material_btn_rate">Rate</string>
     <string translatable="false" name="material_btn_subscribe">Subscribe</string>
     <string translatable="false" name="material_btn_channel">Open channel</string>
     <string translatable="false" name="material_btn_playlist">Add to playlist</string>
@@ -115,9 +116,12 @@
     <string translatable="false" name="material_state_off">Off</string>
     <string translatable="false" name="material_player_customize">Customize buttons</string>
     <string translatable="false" name="material_menu_open_channel">Open channel</string>
+    <string translatable="false" name="material_menu_choose_subtitles">Choose subtitles</string>
+    <string translatable="false" name="material_menu_dislike">Dislike</string>
     <string translatable="false" name="material_menu_move">Move</string>
     <string translatable="false" name="material_menu_remove">Remove from panel</string>
     <string translatable="false" name="material_menu_add">Add to panel</string>
+    <string translatable="false" name="material_subtitles_none">No subtitles for this video</string>
     <string translatable="false" name="material_buttons_subtitle">Up to eight buttons on the panel, the rest in More.</string>
     <string translatable="false" name="material_buttons_on_panel">On the panel</string>
     <string translatable="false" name="material_buttons_in_more">In More</string>

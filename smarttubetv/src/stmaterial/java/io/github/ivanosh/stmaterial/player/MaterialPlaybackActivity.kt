@@ -94,7 +94,11 @@ class MaterialPlaybackActivity : PlaybackActivity() {
     private val repeatGuard = KeyRepeatGuard()
     private val player get() = playbackView as? MaterialPlaybackFragment
     private val presenter get() = PlaybackPresenter.instance(this)
-    private val commands by lazy { PlayerCommands(presenter) { player } }
+    private val commands by lazy {
+        PlayerCommands(presenter, PlayerData.instance(this), { player }) {
+            Toast.makeText(this, R.string.material_subtitles_none, Toast.LENGTH_SHORT).show()
+        }
+    }
     private val store by lazy { ButtonStore(this) }
     private val cardMenu = CardMenu(this, onGone = ::cardsGone, onMessage = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() }, canMarkWatched = false)
     /** The lines of the open card menu, in the order the overlay shows them. */
@@ -687,6 +691,13 @@ class MaterialPlaybackActivity : PlaybackActivity() {
         panel.menu = null
         when (action) {
             MenuAction.OpenChannel -> commands.run(PlayerButton.Channel)
+            // The Subtitles button's hold menu opens the full track picker over the player.
+            MenuAction.ChooseTrack -> {
+                panel.sheetGroups = null
+                commands.openSubtitlePicker()
+            }
+            // The Rate button's hold menu toggles Dislike in place; the panel stays.
+            MenuAction.Dislike -> commands.toggleDislike()
             MenuAction.Move -> panel.moving = true
             MenuAction.Remove -> {
                 val edit = removeButton(panel.buttons, menu.anchor)

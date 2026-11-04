@@ -1,10 +1,21 @@
 package io.github.ivanosh.stmaterial.player
 
 import androidx.annotation.StringRes
+import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerUI
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.PlaybackPresenter
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.track.SubtitleTrack
+import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData
 import com.liskovsoft.smartyoutubetv2.tv.R
 import io.github.ivanosh.stmaterial.logic.ButtonGroupKind
 import io.github.ivanosh.stmaterial.logic.PlayerButton
+import io.github.ivanosh.stmaterial.logic.SubtitleOption
+import io.github.ivanosh.stmaterial.logic.SubtitleToggle
+import io.github.ivanosh.stmaterial.logic.buttonIsOn
+import io.github.ivanosh.stmaterial.logic.decideSubtitleToggle
+import io.github.ivanosh.stmaterial.logic.rateGlyph
+import io.github.ivanosh.stmaterial.logic.rateIsOn
+import io.github.ivanosh.stmaterial.logic.ratingOf
 
 const val PLAY_ICON_PATH = "M7 4l13 8-13 8z"
 const val MORE_ICON_PATH = "M5 12h.01M12 12h.01M19 12h.01"
@@ -27,6 +38,7 @@ fun buttonLabel(button: PlayerButton): Int = when (button) {
     PlayerButton.Speed -> R.string.material_player_speed
     PlayerButton.Like -> R.string.material_btn_like
     PlayerButton.Dislike -> R.string.material_btn_dislike
+    PlayerButton.Rate -> R.string.material_btn_rate
     PlayerButton.Subscribe -> R.string.material_btn_subscribe
     PlayerButton.Channel -> R.string.material_btn_channel
     PlayerButton.AddToPlaylist -> R.string.material_btn_playlist
@@ -54,6 +66,8 @@ fun buttonIcon(button: PlayerButton): String = when (button) {
     PlayerButton.Speed -> "M4 18a9 9 0 1 1 16 0M12 15l4-5"
     PlayerButton.Like -> "M7 11v9H4v-9zM7 11l4-8c1.5 0 2.5 1 2.5 2.5V9H19a2 2 0 0 1 2 2.4l-1.3 7A2 2 0 0 1 17.7 20H7"
     PlayerButton.Dislike -> "M17 13V4h3v9zM17 13l-4 8c-1.5 0-2.5-1-2.5-2.5V15H5a2 2 0 0 1-2-2.4l1.3-7A2 2 0 0 1 6.3 4H17"
+    // The neutral glyph; the panel swaps in the thumbs-down glyph when the video is disliked (see panelIconPath).
+    PlayerButton.Rate -> "M7 11v9H4v-9zM7 11l4-8c1.5 0 2.5 1 2.5 2.5V9H19a2 2 0 0 1 2 2.4l-1.3 7A2 2 0 0 1 17.7 20H7"
     PlayerButton.Subscribe -> "M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 21h4"
     PlayerButton.Channel -> "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c1-4 4-6 8-6s7 2 8 6"
     PlayerButton.AddToPlaylist -> "M4 6h12M4 11h12M4 16h7M17 14v6M14 17h6"
@@ -80,6 +94,8 @@ fun viewId(button: PlayerButton): Int? = when (button) {
     PlayerButton.Speed -> R.id.action_video_speed
     PlayerButton.Like -> R.id.action_thumbs_up
     PlayerButton.Dislike -> R.id.action_thumbs_down
+    // The combined button has no single Leanback id; it reads both thumbs states (see [panelButtonOn]).
+    PlayerButton.Rate -> null
     PlayerButton.Subscribe -> R.id.action_subscribe
     PlayerButton.Channel -> R.id.action_channel
     PlayerButton.AddToPlaylist -> R.id.action_playlist_add
@@ -99,12 +115,44 @@ fun viewId(button: PlayerButton): Int? = when (button) {
 
 /** The buttons whose on/off state the old UI kept, and which show it. */
 val STATEFUL_BUTTONS = setOf(
-    PlayerButton.Subtitles, PlayerButton.Like, PlayerButton.Dislike, PlayerButton.Subscribe, PlayerButton.Repeat,
-    PlayerButton.Mute, PlayerButton.SponsorBlock, PlayerButton.Dimming, PlayerButton.Afr, PlayerButton.Stats,
+    PlayerButton.Subtitles, PlayerButton.Like, PlayerButton.Dislike, PlayerButton.Rate, PlayerButton.Subscribe,
+    PlayerButton.Repeat, PlayerButton.Mute, PlayerButton.SponsorBlock, PlayerButton.Dimming, PlayerButton.Afr,
+    PlayerButton.Stats,
 )
 
-/** Runs the buttons' commands through the handlers the Leanback buttons used. */
-class PlayerCommands(private val presenter: PlaybackPresenter, private val player: () -> MaterialPlaybackFragment?) {
+/** The Leanback id of the Like button, which the combined [PlayerButton.Rate] toggles on a short press. */
+val THUMBS_UP_ID: Int = R.id.action_thumbs_up
+
+/** The Leanback id of the Dislike button, which [PlayerButton.Rate] toggles through its hold menu. */
+val THUMBS_DOWN_ID: Int = R.id.action_thumbs_down
+
+/**
+ * The glyph a panel button draws, given the play state and a [state] lookup of button states by Leanback id.
+ * Play/Pause flips to the play triangle while paused; the combined Rate button shows thumbs-down only when disliked.
+ */
+fun panelIconPath(button: PlayerButton, paused: Boolean, state: (Int) -> Int?): String = when (button) {
+    PlayerButton.PlayPause -> if (paused) PLAY_ICON_PATH else buttonIcon(button)
+    PlayerButton.Rate -> buttonIcon(rateGlyph(ratingOf(state(THUMBS_UP_ID), state(THUMBS_DOWN_ID))))
+    else -> buttonIcon(button)
+}
+
+/** Whether a panel button shows its switched-on accent, from the [state] lookup of button states by Leanback id. */
+fun panelButtonOn(button: PlayerButton, state: (Int) -> Int?): Boolean = when (button) {
+    PlayerButton.Rate -> rateIsOn(ratingOf(state(THUMBS_UP_ID), state(THUMBS_DOWN_ID)))
+    else -> button in STATEFUL_BUTTONS && buttonIsOn(button, viewId(button)?.let { state(it) })
+}
+
+/**
+ * Runs the buttons' commands through the handlers the Leanback buttons used. [playerData] is read and written for
+ * the subtitle toggle (the last-used track and the per-channel memory); [onNoSubtitles] shows the short notice when a
+ * video has no subtitle track to turn on.
+ */
+class PlayerCommands(
+    private val presenter: PlaybackPresenter,
+    private val playerData: PlayerData,
+    private val player: () -> MaterialPlaybackFragment?,
+    private val onNoSubtitles: () -> Unit,
+) {
     fun togglePlay() {
         val view = player() ?: return
         val play = !view.playWhenReady
@@ -120,11 +168,70 @@ class PlayerCommands(private val presenter: PlaybackPresenter, private val playe
             button == PlayerButton.PlayPause -> togglePlay()
             button == PlayerButton.Next -> presenter.onNextClicked()
             button == PlayerButton.Previous -> presenter.onPreviousClicked()
+            // A short press turns subtitles on or off at once; the track picker is in the button's hold menu.
+            button == PlayerButton.Subtitles -> toggleSubtitles()
+            // The combined button's short press toggles Like; Dislike is in its hold menu.
+            button == PlayerButton.Rate -> presenter.onButtonClicked(THUMBS_UP_ID, view.getButtonState(THUMBS_UP_ID))
             id == null -> Unit
-            // The short click of these two toggles a value; the long click is what opens their dialogs.
-            button == PlayerButton.Subtitles || button == PlayerButton.Speed -> presenter.onButtonLongClicked(id, view.getButtonState(id))
+            // Speed keeps its dialog on a short press, as before.
+            button == PlayerButton.Speed -> presenter.onButtonLongClicked(id, view.getButtonState(id))
             // Signed-out handling (a message, or none) is in the handlers, as for the old buttons.
             else -> presenter.onButtonClicked(id, view.getButtonState(id))
         }
+    }
+
+    /** The combined Rate button's secondary action, offered in its hold menu: toggle Dislike. */
+    fun toggleDislike() {
+        val view = player() ?: return
+        presenter.onButtonClicked(THUMBS_DOWN_ID, view.getButtonState(THUMBS_DOWN_ID))
+    }
+
+    /** The track picker, reached from the Subtitles button's hold menu: upstream's full subtitles dialog. */
+    fun openSubtitlePicker() {
+        val view = player() ?: return
+        val id = viewId(PlayerButton.Subtitles) ?: return
+        presenter.onButtonLongClicked(id, view.getButtonState(id))
+    }
+
+    /**
+     * A short press of the Subtitles button. On turns off; off turns on a sensible track with no detour through a
+     * menu (see [decideSubtitleToggle]). The chosen format is applied to the engine, remembered as the last subtitle
+     * format, and kept for this channel, so the same channel starts with subtitles on next time. The full picker is
+     * only a fallback for a list not loaded yet; a video with no track shows a short notice.
+     */
+    private fun toggleSubtitles() {
+        val view = player() ?: return
+        val id = viewId(PlayerButton.Subtitles) ?: return
+        val formats: List<FormatItem>? = view.subtitleFormats
+        val currentlyOn = view.getButtonState(id) == PlayerUI.BUTTON_ON
+        val options = formats.orEmpty().mapIndexed { index, format ->
+            SubtitleOption(index, SubtitleTrack.trim(format.language), format.isDefault, SubtitleTrack.isAuto(format.language))
+        }
+        when (val decision = decideSubtitleToggle(
+            if (formats == null) emptyList() else options,
+            currentlyOn,
+            playerData.lastSubtitleFormats.mapNotNull { it.language?.let(SubtitleTrack::trim) },
+            playerData.subtitleLanguage?.let(SubtitleTrack::trim),
+        )) {
+            is SubtitleToggle.Enable -> applySubtitle(formats!![decision.index], id, on = true)
+            SubtitleToggle.Disable -> applySubtitle(FormatItem.SUBTITLE_NONE, id, on = false)
+            SubtitleToggle.OpenPicker -> openSubtitlePicker()
+            SubtitleToggle.NoSubtitles -> onNoSubtitles()
+        }
+    }
+
+    private fun applySubtitle(format: FormatItem, id: Int, on: Boolean) {
+        val view = player() ?: return
+        view.setFormat(format)
+        playerData.setFormat(format)
+        view.setButtonState(id, if (on) PlayerUI.BUTTON_ON else PlayerUI.BUTTON_OFF)
+        enableSubtitleForChannel(on)
+    }
+
+    /** Remembers the on/off choice for this channel, through upstream's per-channel store, when it is in use. */
+    private fun enableSubtitleForChannel(enable: Boolean) {
+        if (!playerData.isSubtitlesPerChannelEnabled) return
+        val channelId = player()?.video?.channelId ?: return
+        if (enable) playerData.enableSubtitlesPerChannel(channelId) else playerData.disableSubtitlesPerChannel(channelId)
     }
 }

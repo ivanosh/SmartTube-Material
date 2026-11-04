@@ -33,7 +33,6 @@ import com.liskovsoft.smartyoutubetv2.tv.R
 import io.github.ivanosh.stmaterial.logic.ButtonGroup
 import io.github.ivanosh.stmaterial.logic.ButtonGroupKind
 import io.github.ivanosh.stmaterial.logic.PlayerButton
-import io.github.ivanosh.stmaterial.logic.buttonIsOn
 import io.github.ivanosh.stmaterial.ui.Palette
 import io.github.ivanosh.stmaterial.ui.StrokeIcon
 
@@ -99,11 +98,11 @@ fun BoxScope.MoreSheet(state: PlayerOverlayState) {
                         modifier = Modifier.padding(start = 20.dp, top = 8.dp),
                     )
                     is SheetLine.Item -> SheetRow(
-                        icon = buttonIcon(line.button),
+                        icon = panelIconPath(line.button, paused = false) { state.buttonStates[it] },
                         label = stringResource(buttonLabel(line.button)),
                         // Repeat has seven modes and no short name for them, so it shows none.
                         value = if (line.button in STATEFUL_BUTTONS && line.button != PlayerButton.Repeat) {
-                            val on = buttonIsOn(line.button, viewId(line.button)?.let { state.buttonStates[it] })
+                            val on = panelButtonOn(line.button) { state.buttonStates[it] }
                             stringResource(if (on) R.string.material_state_on else R.string.material_state_off)
                         } else "",
                         focused = cursor == line.entry,

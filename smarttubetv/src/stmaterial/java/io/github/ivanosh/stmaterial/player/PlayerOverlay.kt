@@ -74,7 +74,6 @@ import androidx.tv.material3.Text
 import com.liskovsoft.smartyoutubetv2.tv.R
 import io.github.ivanosh.stmaterial.logic.PanelFocus
 import io.github.ivanosh.stmaterial.logic.PlayerButton
-import io.github.ivanosh.stmaterial.logic.buttonIsOn
 import io.github.ivanosh.stmaterial.logic.chapterIndexAt
 import io.github.ivanosh.stmaterial.logic.formatPlayerTime
 import io.github.ivanosh.stmaterial.logic.handleCenter
@@ -396,9 +395,9 @@ private fun Buttons(state: PlayerOverlayState) {
                     paused -> stringResource(R.string.material_player_play)
                     else -> stringResource(R.string.material_player_pause)
                 },
-                iconPath = if (paused) PLAY_ICON_PATH else buttonIcon(button),
+                iconPath = panelIconPath(button, paused) { state.buttonStates[it] },
                 focused = state.focus == PanelFocus.BUTTONS && state.buttonIndex == index,
-                on = button in STATEFUL_BUTTONS && buttonIsOn(button, viewId(button)?.let { state.buttonStates[it] }),
+                on = panelButtonOn(button) { state.buttonStates[it] },
                 lifted = state.moving && state.buttonIndex == index,
             )
         }

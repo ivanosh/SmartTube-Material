@@ -7,10 +7,11 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PlayerCommandsTest {
-    private val withoutId = setOf(PlayerButton.PlayPause, PlayerButton.Next, PlayerButton.Previous)
+    // Rate joins these: it stands for two Leanback buttons at once, so it has no single id of its own.
+    private val withoutId = setOf(PlayerButton.PlayPause, PlayerButton.Next, PlayerButton.Previous, PlayerButton.Rate)
 
     @Test
-    fun onlyPlayPauseNextAndPreviousHaveNoLeanbackId() {
+    fun onlyPlayPauseNextPreviousAndRateHaveNoLeanbackId() {
         for (button in PlayerButton.values()) {
             if (button in withoutId) assertNull(button.name, viewId(button)) else assertNotNull(button.name, viewId(button))
         }

@@ -1,8 +1,11 @@
 package io.github.ivanosh.stmaterial.logic
 
-/** The buttons of the first version. The order is the order of the editor's hidden list. */
+/**
+ * The buttons of the first version. The order is the order of the editor's hidden list. [Rate] is one round button
+ * that stands for Like and Dislike together; the two still exist on their own for anyone who splits them again.
+ */
 enum class PlayerButton {
-    PlayPause, Next, Previous, Quality, Subtitles, Speed, Like, Dislike, Subscribe, Channel, AddToPlaylist, Queue,
+    PlayPause, Next, Previous, Quality, Subtitles, Speed, Like, Dislike, Rate, Subscribe, Channel, AddToPlaylist, Queue,
     Repeat, Search, VideoInfo, Share, Zoom, Stats, SeekInterval, SponsorBlock, Dimming, Mute, Afr
 }
 
@@ -21,7 +24,7 @@ val LEGACY_DEFAULT_BUTTONS = listOf(PlayerButton.PlayPause, PlayerButton.Next, P
 
 val DEFAULT_BUTTONS = listOf(
     PlayerButton.PlayPause, PlayerButton.Next, PlayerButton.Quality, PlayerButton.Subtitles, PlayerButton.Speed,
-    PlayerButton.Like, PlayerButton.Dislike, PlayerButton.Subscribe
+    PlayerButton.Rate, PlayerButton.Subscribe
 )
 
 fun groupOf(button: PlayerButton): ButtonGroupKind = when (button) {
@@ -29,8 +32,8 @@ fun groupOf(button: PlayerButton): ButtonGroupKind = when (button) {
     PlayerButton.SeekInterval, PlayerButton.SponsorBlock, PlayerButton.Queue -> ButtonGroupKind.Playback
     PlayerButton.Quality, PlayerButton.Subtitles, PlayerButton.Zoom, PlayerButton.Mute, PlayerButton.Dimming,
     PlayerButton.Afr, PlayerButton.Stats -> ButtonGroupKind.PictureAndSound
-    PlayerButton.Like, PlayerButton.Dislike, PlayerButton.Subscribe, PlayerButton.Channel, PlayerButton.AddToPlaylist,
-    PlayerButton.Search, PlayerButton.VideoInfo, PlayerButton.Share -> ButtonGroupKind.VideoAndChannel
+    PlayerButton.Like, PlayerButton.Dislike, PlayerButton.Rate, PlayerButton.Subscribe, PlayerButton.Channel,
+    PlayerButton.AddToPlaylist, PlayerButton.Search, PlayerButton.VideoInfo, PlayerButton.Share -> ButtonGroupKind.VideoAndChannel
 }
 
 /** What More lists: every button that is not on the panel, by group. A group with nothing left is left out. */
@@ -90,3 +93,22 @@ private const val PLAYBACK_MODE_ONE = 3
 /** Whether a button with state shows as switched on. [state] is what the presenter last set for it, if anything. */
 fun buttonIsOn(button: PlayerButton, state: Int?): Boolean =
     if (button == PlayerButton.Repeat) state == PLAYBACK_MODE_ONE else state == STATE_ON
+
+/** How the current video is rated, as the combined [PlayerButton.Rate] button reads it. */
+enum class Rating { None, Liked, Disliked }
+
+/**
+ * The rating from the two underlying button states the presenter set: [likeState] is the Like button's
+ * (`action_thumbs_up`), [dislikeState] the Dislike button's (`action_thumbs_down`). Like wins if somehow both are on.
+ */
+fun ratingOf(likeState: Int?, dislikeState: Int?): Rating = when {
+    likeState == STATE_ON -> Rating.Liked
+    dislikeState == STATE_ON -> Rating.Disliked
+    else -> Rating.None
+}
+
+/** The button whose glyph the combined Rate button borrows: thumbs-down when disliked, thumbs-up otherwise. */
+fun rateGlyph(rating: Rating): PlayerButton = if (rating == Rating.Disliked) PlayerButton.Dislike else PlayerButton.Like
+
+/** The Rate button shows its switched-on accent whenever the video is rated either way. */
+fun rateIsOn(rating: Rating): Boolean = rating != Rating.None

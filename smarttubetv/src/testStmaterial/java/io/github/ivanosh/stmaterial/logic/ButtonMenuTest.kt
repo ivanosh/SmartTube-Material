@@ -16,8 +16,20 @@ class ButtonMenuTest {
         )
     }
 
+    @Test fun subtitlesHasChooseTrackFirstAndRateHasDislikeFirst() {
+        assertEquals(
+            listOf(MenuAction.ChooseTrack, MenuAction.Move, MenuAction.Remove, MenuAction.Customize),
+            panelMenuActions(PlayerButton.Subtitles),
+        )
+        assertEquals(
+            listOf(MenuAction.Dislike, MenuAction.Move, MenuAction.Remove, MenuAction.Customize),
+            panelMenuActions(PlayerButton.Rate),
+        )
+    }
+
     @Test fun otherButtonsHaveNoSpecialAction() {
-        for (button in PlayerButton.values().filter { it != PlayerButton.Subscribe }) {
+        val withSecondary = setOf(PlayerButton.Subscribe, PlayerButton.Subtitles, PlayerButton.Rate)
+        for (button in PlayerButton.values().filter { it !in withSecondary }) {
             assertEquals(button.name, listOf(MenuAction.Move, MenuAction.Remove, MenuAction.Customize), panelMenuActions(button))
         }
     }
@@ -84,10 +96,10 @@ class ButtonMenuTest {
     }
 
     @Test fun addAtTheLimitDisplacesTheLast() {
-        val full = DEFAULT_BUTTONS
+        val full = DEFAULT_BUTTONS + PlayerButton.Channel
         assertEquals(PANEL_LIMIT, full.size)
         val r = addButton(full, PlayerButton.Mute)
-        assertEquals(PlayerButton.Subscribe, r.displaced)
+        assertEquals(PlayerButton.Channel, r.displaced)
         assertEquals(full.dropLast(1) + PlayerButton.Mute, r.buttons)
         assertEquals(PANEL_LIMIT, r.buttons.size)
     }

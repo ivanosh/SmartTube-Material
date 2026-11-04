@@ -10,15 +10,25 @@ import org.junit.Test
 class PlayerButtonsTest {
     @Test
     fun theDefaultIsTheOneInGlobalConstraints() {
-        assertEquals(listOf(PlayPause, Next, Quality, Subtitles, Speed, Like, Dislike, Subscribe), DEFAULT_BUTTONS)
+        // The old five plus the combined Rate button and Subscribe: Rate stands in for the Like/Dislike pair.
+        assertEquals(listOf(PlayPause, Next, Quality, Subtitles, Speed, Rate, Subscribe), DEFAULT_BUTTONS)
         assertEquals(8, PANEL_LIMIT)
-        assertEquals(PANEL_LIMIT, DEFAULT_BUTTONS.size)
+        assertTrue(DEFAULT_BUTTONS.size <= PANEL_LIMIT)
+        assertFalse(Like in DEFAULT_BUTTONS)
+        assertFalse(Dislike in DEFAULT_BUTTONS)
         assertEquals(listOf(PlayPause, Next, Quality, Subtitles, Speed), LEGACY_DEFAULT_BUTTONS)
     }
 
     @Test
-    fun theFirstVersionHasTwentyThreeButtonsAndNoneOfTheExcludedOnes() {
-        assertEquals(23, PlayerButton.values().size)
+    fun likeAndDislikeStayAvailableToSplitTheRateButton() {
+        // Off the panel by default, so both show up in More / the editor's hidden list.
+        assertTrue(Like in moreGroups(DEFAULT_BUTTONS).flatMap { it.buttons })
+        assertTrue(Dislike in moreGroups(DEFAULT_BUTTONS).flatMap { it.buttons })
+    }
+
+    @Test
+    fun theFirstVersionHasTwentyFourButtonsAndNoneOfTheExcludedOnes() {
+        assertEquals(24, PlayerButton.values().size)
         val names = PlayerButton.values().map { it.name }
         for (excluded in listOf("Chat", "Pip", "Rotate", "Flip", "ScreenOff", "Comments")) assertFalse(excluded, excluded in names)
     }
@@ -54,11 +64,13 @@ class PlayerButtonsTest {
 
     @Test
     fun aButtonPushedOffTheFullPanelShowsUpInMore() {
-        val editor = buttonsEditorState(DEFAULT_BUTTONS).pick(Queue)
+        val full = listOf(PlayPause, Next, Quality, Subtitles, Speed, Rate, Subscribe, Channel)
+        assertEquals(PANEL_LIMIT, full.size)
+        val editor = buttonsEditorState(full).pick(Queue)
         val result = editor.toggleList()
-        assertEquals(Subscribe, result.displaced)
+        assertEquals(Channel, result.displaced)
         assertEquals(PANEL_LIMIT, result.state.shown.size)
-        assertTrue(Subscribe in moreGroups(result.state.shown).flatMap { it.buttons })
+        assertTrue(Channel in moreGroups(result.state.shown).flatMap { it.buttons })
         assertFalse(Queue in moreGroups(result.state.shown).flatMap { it.buttons })
     }
 
@@ -193,5 +205,29 @@ class PlayerButtonsTest {
         assertFalse(buttonIsOn(Like, null))
         assertTrue(buttonIsOn(Repeat, 3))
         assertFalse(buttonIsOn(Repeat, 1))
+    }
+
+    @Test
+    fun theRatingFollowsTheLikeAndDislikeStatesThePresenterSet() {
+        assertEquals(Rating.None, ratingOf(null, null))
+        assertEquals(Rating.None, ratingOf(0, 0))
+        assertEquals(Rating.Liked, ratingOf(1, 0))
+        assertEquals(Rating.Disliked, ratingOf(0, 1))
+        // Should both ever read on, Like wins rather than showing nothing.
+        assertEquals(Rating.Liked, ratingOf(1, 1))
+    }
+
+    @Test
+    fun theRateButtonBorrowsTheThumbsDownGlyphOnlyWhenDisliked() {
+        assertEquals(Like, rateGlyph(Rating.None))
+        assertEquals(Like, rateGlyph(Rating.Liked))
+        assertEquals(Dislike, rateGlyph(Rating.Disliked))
+    }
+
+    @Test
+    fun theRateButtonShowsItsAccentWhenRatedEitherWay() {
+        assertFalse(rateIsOn(Rating.None))
+        assertTrue(rateIsOn(Rating.Liked))
+        assertTrue(rateIsOn(Rating.Disliked))
     }
 }

@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.Color
 
 private fun label(action: MenuAction): Int = when (action) {
     MenuAction.OpenChannel -> R.string.material_menu_open_channel
+    MenuAction.ChooseTrack -> R.string.material_menu_choose_subtitles
+    MenuAction.Dislike -> R.string.material_menu_dislike
     MenuAction.Move -> R.string.material_menu_move
     MenuAction.Remove -> R.string.material_menu_remove
     MenuAction.Customize -> R.string.material_player_customize
