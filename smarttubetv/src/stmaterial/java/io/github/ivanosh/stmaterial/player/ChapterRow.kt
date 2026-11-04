@@ -78,7 +78,7 @@ fun ChapterRow(state: PlayerOverlayState) {
     if (state.chapters.isEmpty() || !state.chaptersRevealed) return
     val chapters = state.chapters
     val inRow by remember { derivedStateOf { state.focus == PanelFocus.CHAPTERS } }
-    val level = animateFloatAsState(chapterRowShape(state.focus).level(), tween(150), label = "chapterRow")
+    val level = animateFloatAsState(chapterRowShape(state.focus, state.description.isNotBlank()).level(), tween(150), label = "chapterRow")
     val starts = remember(chapters) { chapters.map { it.startMs } }
     val current by remember(chapters) { derivedStateOf { chapterIndexAt(starts, state.positionMs) } }
     val list = rememberLazyListState()

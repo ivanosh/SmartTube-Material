@@ -303,4 +303,77 @@ class UpNextTest {
         assertEquals(PanelFocus.PROGRESS, reopenedRow(ui(PanelFocus.PROGRESS), lostIndex = 4, count = 6).focus)
         assertEquals(PanelFocus.BUTTONS, reopenedRow(ui(PanelFocus.BUTTONS), lostIndex = 4, count = 0).focus)
     }
+
+    // The description preview sits between the chapter row and the Up next row.
+
+    private fun withDesc(focus: PanelFocus, chapters: Int = 0, upNext: Int = 6) =
+        ui(focus, chapters = chapters, upNext = upNext).copy(descriptionPresent = true)
+
+    @Test
+    fun downReachesTheDescriptionBetweenTheRows() {
+        // Buttons -> chapters -> description -> up next.
+        val fromButtons = press(withDesc(PanelFocus.BUTTONS, chapters = 4), PlayerKey.Down).first
+        assertEquals(PanelFocus.CHAPTERS, fromButtons.focus)
+        val fromChapters = press(withDesc(PanelFocus.CHAPTERS, chapters = 4), PlayerKey.Down).first
+        assertEquals(PanelFocus.DESCRIPTION, fromChapters.focus)
+        val fromDescription = press(withDesc(PanelFocus.DESCRIPTION, chapters = 4), PlayerKey.Down).first
+        assertEquals(PanelFocus.UPNEXT, fromDescription.focus)
+    }
+
+    @Test
+    fun withoutChaptersButtonsReachTheDescriptionFirst() {
+        assertEquals(PanelFocus.DESCRIPTION, press(withDesc(PanelFocus.BUTTONS), PlayerKey.Down).first.focus)
+    }
+
+    @Test
+    fun upAndBackFromTheDescriptionGoToTheChapterRowOrTheButtons() {
+        for (key in listOf(PlayerKey.Up, PlayerKey.Back)) {
+            assertEquals(PanelFocus.CHAPTERS, press(withDesc(PanelFocus.DESCRIPTION, chapters = 4), key).first.focus)
+            assertEquals(PanelFocus.BUTTONS, press(withDesc(PanelFocus.DESCRIPTION), key).first.focus)
+        }
+    }
+
+    @Test
+    fun upAndBackFromTheRowReachTheDescriptionWhenThereIsOne() {
+        for (key in listOf(PlayerKey.Up, PlayerKey.Back)) {
+            assertEquals(PanelFocus.DESCRIPTION, press(withDesc(PanelFocus.UPNEXT, chapters = 4), key).first.focus)
+        }
+    }
+
+    @Test
+    fun okOnTheDescriptionOpensItAndKeepsFocus() {
+        val (next, commands) = press(withDesc(PanelFocus.DESCRIPTION), PlayerKey.Ok)
+        assertEquals(PanelFocus.DESCRIPTION, next.focus)
+        assertEquals(listOf<PlayerCommand>(PlayerCommand.OpenDescription), commands)
+    }
+
+    @Test
+    fun leftAndRightOnTheDescriptionDoNothing() {
+        val on = withDesc(PanelFocus.DESCRIPTION, chapters = 4)
+        assertEquals(on to emptyList<PlayerCommand>(), press(on, PlayerKey.Left))
+        assertEquals(on to emptyList<PlayerCommand>(), press(on, PlayerKey.Right))
+    }
+
+    @Test
+    fun theDescriptionKeepsThePanelOpenWhilePlaying() {
+        assertFalse(shouldAutoHide(withDesc(PanelFocus.DESCRIPTION), playing = true, idleMs = 60_000))
+    }
+
+    // Row shapes with a description present.
+
+    @Test
+    fun theChapterRowDoesNotPeekUnderADescriptionPreview() {
+        assertEquals(PanelRowShape.Full, chapterRowShape(PanelFocus.CHAPTERS, descriptionPresent = true))
+        assertEquals(PanelRowShape.Hidden, chapterRowShape(PanelFocus.DESCRIPTION, descriptionPresent = true))
+        assertEquals(PanelRowShape.Hidden, chapterRowShape(PanelFocus.BUTTONS, descriptionPresent = true))
+        // Without a description it still peeks under the buttons.
+        assertEquals(PanelRowShape.Peek, chapterRowShape(PanelFocus.BUTTONS, descriptionPresent = false))
+    }
+
+    @Test
+    fun theUpNextRowPeeksUnderTheDescriptionAndHidesAboveIt() {
+        assertEquals(PanelRowShape.Peek, upNextRowShape(PanelFocus.DESCRIPTION, chaptersPresent = false, descriptionPresent = true))
+        assertEquals(PanelRowShape.Hidden, upNextRowShape(PanelFocus.BUTTONS, chaptersPresent = false, descriptionPresent = true))
+        assertEquals(PanelRowShape.Full, upNextRowShape(PanelFocus.UPNEXT, chaptersPresent = false, descriptionPresent = true))
+    }
 }

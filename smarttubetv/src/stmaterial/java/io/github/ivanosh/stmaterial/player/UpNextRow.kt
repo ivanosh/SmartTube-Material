@@ -99,7 +99,7 @@ fun UpNextRow(state: PlayerOverlayState) {
     if (state.upNext.isEmpty() || !state.upNextRevealed) return
     val videos = state.upNext
     val inRow by remember { derivedStateOf { state.focus == PanelFocus.UPNEXT } }
-    val level = animateFloatAsState(upNextRowShape(state.focus, state.chapters.isNotEmpty()).level(), tween(150), label = "upNextRow")
+    val level = animateFloatAsState(upNextRowShape(state.focus, state.chapters.isNotEmpty(), state.description.isNotBlank()).level(), tween(150), label = "upNextRow")
     val list = rememberLazyListState()
     val focusedIndex = if (inRow) state.upNextIndex else -1
     LaunchedEffect(focusedIndex) {

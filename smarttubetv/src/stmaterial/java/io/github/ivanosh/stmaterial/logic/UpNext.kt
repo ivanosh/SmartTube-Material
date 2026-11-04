@@ -3,21 +3,27 @@ package io.github.ivanosh.stmaterial.logic
 /** How much of a row below the buttons the panel's layout gives room: none, the tops of its cards, or all of it. */
 enum class PanelRowShape { Hidden, Peek, Full }
 
-/** The chapter row is the first below the buttons. With focus in the row under it, it gives way. */
-fun chapterRowShape(focus: PanelFocus): PanelRowShape = when (focus) {
-    PanelFocus.CHAPTERS -> PanelRowShape.Full
-    PanelFocus.UPNEXT -> PanelRowShape.Hidden
+/**
+ * The chapter row is the first below the buttons. It is full in focus and gives way (hidden) with focus in a row under it.
+ * It peeks otherwise, except that a description preview below it cannot share the bottom margin with a peek, so when a
+ * description is present the row only shows in focus.
+ */
+fun chapterRowShape(focus: PanelFocus, descriptionPresent: Boolean = false): PanelRowShape = when {
+    focus == PanelFocus.CHAPTERS -> PanelRowShape.Full
+    focus == PanelFocus.DESCRIPTION || focus == PanelFocus.UPNEXT -> PanelRowShape.Hidden
+    descriptionPresent -> PanelRowShape.Hidden
     else -> PanelRowShape.Peek
 }
 
 /**
- * The Up next row is the last. Its cards peek at the screen edge from the row above it: the buttons when there are no chapters,
- * the chapter row otherwise. With the chapter row peeking, this one has no room.
+ * The Up next row is the last. Its cards peek at the screen edge from the row above it: the buttons when there is nothing
+ * between, the chapter row or the description preview otherwise. While something sits above it (a chapter row or a
+ * description preview), it has no room until its own row or the one just above it has focus.
  */
-fun upNextRowShape(focus: PanelFocus, chaptersPresent: Boolean): PanelRowShape = when {
+fun upNextRowShape(focus: PanelFocus, chaptersPresent: Boolean, descriptionPresent: Boolean = false): PanelRowShape = when {
     focus == PanelFocus.UPNEXT -> PanelRowShape.Full
-    focus == PanelFocus.CHAPTERS -> PanelRowShape.Peek
-    chaptersPresent -> PanelRowShape.Hidden
+    focus == PanelFocus.CHAPTERS || focus == PanelFocus.DESCRIPTION -> PanelRowShape.Peek
+    chaptersPresent || descriptionPresent -> PanelRowShape.Hidden
     else -> PanelRowShape.Peek
 }
 
@@ -31,7 +37,10 @@ fun endOfVideoFocus(upNextCount: Int, lastSeekKeyMs: Long? = null, nowMs: Long =
 /** The row changed (a new video, a card gone): the card in focus stays in range, and focus in a row that is gone goes up. */
 fun withUpNext(ui: PlayerUi, count: Int): PlayerUi {
     val moved = ui.copy(upNextCount = count, upNextIndex = ui.upNextIndex.coerceIn(0, (count - 1).coerceAtLeast(0)))
-    return if (count == 0 && moved.focus == PanelFocus.UPNEXT) moved.copy(focus = if (moved.chapterCount > 0) PanelFocus.CHAPTERS else PanelFocus.BUTTONS) else moved
+    return if (count == 0 && moved.focus == PanelFocus.UPNEXT) {
+        val up = if (moved.descriptionPresent) PanelFocus.DESCRIPTION else if (moved.chapterCount > 0) PanelFocus.CHAPTERS else PanelFocus.BUTTONS
+        moved.copy(focus = up)
+    } else moved
 }
 
 /**
